@@ -47,7 +47,7 @@ retrieval:
   top_k: 20
   rerank_top_k: 5
   chunk_size: 256
-  chunk_overlap: 64
+  chunk_overlap: 96
   min_chunk_size: 30
   bm25_k1: 1.5
   bm25_b: 0.75
