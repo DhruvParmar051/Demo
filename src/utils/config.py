@@ -334,7 +334,7 @@ class DataConfig(BaseModel):
 
 class SyntheticDataConfig(BaseModel):
     # Lean local-only targets. Enough for DoRA-rank-8 DPO + cheap heads.
-    qa_pairs: int = 500
+    qa_pairs: int = 800
     preference_triplets: int = 200
     confidence_labels: int = 500
     alpha_labels: int = 500

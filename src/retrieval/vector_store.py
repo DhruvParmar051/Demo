@@ -7,11 +7,12 @@ Dense retrieval backed by BGE-m3 embeddings stored in ChromaDB.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import chromadb
 import numpy as np
 from sentence_transformers import SentenceTransformer
+from chromadb.api.types import Metadata
 
 from src.data.schema import ChunkRecord
 from src.utils.config import get_config
@@ -103,7 +104,7 @@ class ChromaVectorStore:
         )
 
         # Prepare metadata (Chroma only accepts str/int/float/bool values) ----
-        metadatas: list[dict[str, Any]] = []
+        metadatas: list[Metadata] = []
         for chunk in chunks:
             meta: dict[str, Any] = {
                 "doc_id": chunk.doc_id,
@@ -133,6 +134,66 @@ class ChromaVectorStore:
 
         logger.info("Upserted %d chunks into '%s'", len(ids), self.collection_name)
 
+    def query_by_embedding(
+        self,
+        query_embedding: np.ndarray,
+        top_k: int = 20,
+        filters: dict[str, Any] | None = None,
+    ) -> list[tuple[ChunkRecord, float]]:
+        """Retrieve using precomputed embedding (avoids re-encoding query)."""
+
+        if self.collection.count() == 0:
+            return []
+
+        query_kwargs: dict[str, Any] = {
+            "query_embeddings": [query_embedding.astype(float).tolist()],
+            "n_results": min(top_k, self.collection.count() or top_k),
+            "include": ["documents", "metadatas", "distances"],
+        }
+
+        if filters:
+            query_kwargs["where"] = filters
+
+        results = self.collection.query(**query_kwargs)
+
+        ids = results.get("ids") or []
+        docs = results.get("documents") or []
+        metas = results.get("metadatas") or []
+        dists = results.get("distances") or []
+
+        if not ids or not docs or not metas or not dists:
+            return []
+
+        chunk_ids = ids[0]
+        documents = docs[0]
+        distances = dists[0]
+        metadatas = cast(list[dict[str, Any]], metas[0])
+        
+        output: list[tuple[ChunkRecord, float]] = []
+        for cid, doc, meta, dist in zip(chunk_ids, documents, metadatas, distances):
+            similarity = 1.0 - dist
+
+            user_meta = {}
+            for k, v in meta.items():
+                if k.startswith("meta_"):
+                    user_meta[k[5:]] = v
+
+            chunk = ChunkRecord(
+                chunk_id=cid,
+                doc_id=meta.get("doc_id", ""),
+                text=doc,
+                source=meta.get("source", ""),
+                page_number=meta.get("page_number"),
+                chunk_index=meta.get("chunk_index", 0),
+                token_count=meta.get("token_count", 0),
+                metadata=user_meta,
+                created_at=meta.get("created_at", ""),
+            )
+
+            output.append((chunk, similarity))
+
+        return output
+
     def query(
         self,
         query_text: str,
@@ -160,6 +221,9 @@ class ChromaVectorStore:
             [query_text], normalize_embeddings=True
         ).tolist()
 
+        if self.collection.count() == 0:
+            return []
+
         query_kwargs: dict[str, Any] = {
             "query_embeddings": query_embedding,
             "n_results": min(top_k, self.collection.count() or top_k),
@@ -168,16 +232,23 @@ class ChromaVectorStore:
         if filters:
             query_kwargs["where"] = filters
 
-        if self.collection.count() == 0:
-            return []
+        
 
         results = self.collection.query(**query_kwargs)
 
         # Unpack Chroma results (lists of lists) ------------------------------
-        chunk_ids: list[str] = results["ids"][0]
-        documents: list[str] = results["documents"][0]
-        metadatas: list[dict] = results["metadatas"][0]
-        distances: list[float] = results["distances"][0]
+        ids = results.get("ids") or []
+        docs = results.get("documents") or []
+        metas = results.get("metadatas") or []
+        dists = results.get("distances") or []
+
+        if not ids or not docs or not metas or not dists:
+            return []
+
+        chunk_ids = ids[0]
+        documents = docs[0]
+        distances = dists[0]
+        metadatas = cast(list[dict[str, Any]], metas[0])
 
         output: list[tuple[ChunkRecord, float]] = []
         for cid, doc, meta, dist in zip(chunk_ids, documents, metadatas, distances):
@@ -186,10 +257,6 @@ class ChromaVectorStore:
 
             # Reconstruct user metadata
             user_meta = {}
-            reserved = {
-                "doc_id", "source", "chunk_index", "token_count",
-                "created_at", "page_number",
-            }
             for k, v in meta.items():
                 if k.startswith("meta_"):
                     user_meta[k[5:]] = v

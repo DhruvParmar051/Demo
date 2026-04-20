@@ -12,6 +12,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import threading
 
 from src.cgal.alpha_network import AlphaNetwork
 from src.cgal.confidence_head import ConfidenceHead
@@ -142,6 +143,13 @@ class M5Pipeline:
 
         # Verifier only enabled when flag is set.
         self.answer_verify = answer_verify if flags.verify else None
+        if self.answer_verify is not None and hasattr(self.answer_verify, "warmup"):
+            logger.info("Starting AnswerVerify warmup in background thread")
+            threading.Thread(
+                target=self.answer_verify.warmup,
+                daemon=True,
+                name="answer_verify_warmup",
+            ).start()
 
         # Retriever wraps alpha network (or fixed alpha).
         self.retriever = HybridRetriever(

@@ -15,6 +15,7 @@ from typing import Any
 
 import numpy as np
 import torch
+from concurrent.futures import ThreadPoolExecutor
 
 from src.data.schema import ChunkRecord
 from src.retrieval.bm25_index import BM25Index
@@ -57,6 +58,10 @@ class HybridRetriever:
         self.vector_store = vector_store
         self.bm25_index = bm25_index
         self.alpha_network = alpha_network
+        self._retrieval_executor = ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="hybrid_retrieval",
+        )
 
         cfg = get_config()
         self._default_alpha: float = float(cfg.retrieval.initial_alpha)
@@ -73,6 +78,7 @@ class HybridRetriever:
         top_k: int = 20,
         alpha: float | None = None,
         filters: dict[str, Any] | None = None,
+        query_embedding: np.ndarray | None = None,
     ) -> list[tuple[ChunkRecord, float]]:
         """Run hybrid retrieval and return fused, deduplicated results.
 
@@ -108,10 +114,23 @@ class HybridRetriever:
         # --- Fetch candidates from both backends (request extra to help dedup)
         fetch_k = top_k * 2
 
-        dense_results = self.vector_store.query(
-            query_text=query, top_k=fetch_k, filters=filters
-        )
-        sparse_results = self.bm25_index.query(query_text=query, top_k=fetch_k)
+        def _dense_retrieve():
+            if query_embedding is not None and hasattr(self.vector_store, "query_by_embedding"):
+                return self.vector_store.query_by_embedding(
+                    query_embedding, top_k=fetch_k, filters=filters
+                )
+            return self.vector_store.query(
+                query_text=query, top_k=fetch_k, filters=filters
+            )
+
+        def _sparse_retrieve():
+            return self.bm25_index.query(query_text=query, top_k=fetch_k)
+
+        dense_future = self._retrieval_executor.submit(_dense_retrieve)
+        sparse_future = self._retrieval_executor.submit(_sparse_retrieve)
+
+        dense_results = dense_future.result()
+        sparse_results = sparse_future.result()
 
         # --- Build score maps ------------------------------------------------
         dense_map: dict[str, float] = {
@@ -230,3 +249,9 @@ class HybridRetriever:
             "embedding_norm": embedding_norm,
             "has_exact_phrase": has_exact_phrase,
         }
+
+    def __del__(self) -> None:
+        try:
+            self._retrieval_executor.shutdown(wait=False)
+        except Exception:
+            pass

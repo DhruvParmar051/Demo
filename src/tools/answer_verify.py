@@ -94,6 +94,19 @@ class AnswerVerify:
             self._nlp = spacy.blank("en")
             self._nlp.add_pipe("sentencizer")
         return self._nlp
+    
+    def warmup(self) -> None:
+        """Pre-load models to avoid cold-start latency."""
+        try:
+            self._load_spacy()
+            nli = self._load_nli()
+
+            # Small warmup inference (important for lazy init inside model)
+            nli.predict([("warm up premise", "warm up hypothesis")])
+
+            logger.info("AnswerVerify warmup complete")
+        except Exception as exc:
+            logger.warning("AnswerVerify warmup failed (non-fatal): %s", exc)
 
     # ------------------------------------------------------------------
     # Public API

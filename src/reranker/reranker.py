@@ -21,8 +21,6 @@ from src.utils.device import get_device
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MAX_LENGTH = 8192
-
 
 class ColBERTReranker:
     """Cross-encoder reranker backed by Jina-ColBERT-v2.
@@ -52,6 +50,7 @@ class ColBERTReranker:
         checkpoint_path: str | None = None,
         max_length: int | None = None,
         batch_size: int = 32,
+        inference_max_length: int = 512,  # NEW
     ) -> None:
         cfg = get_config()
         self.model_name = model_name
@@ -61,13 +60,17 @@ class ColBERTReranker:
             if max_length is not None
             else int(cfg.models.reranker.max_seq_length)
         )
+        self._inference_max_length = min(self.max_length, inference_max_length)
 
         self.device = get_device(cfg.device.preferred_device)
 
         load_path = checkpoint_path if checkpoint_path else model_name
 
         logger.info(
-            "Loading reranker model from %s on %s", load_path, self.device
+            "Loading reranker model from %s on %s (inference_max_length=%d)",
+            load_path,
+            self.device,
+            self._inference_max_length,
         )
 
         # Load tokenizer from the same location as the weights. When a
@@ -155,7 +158,7 @@ class ColBERTReranker:
                 passages,
                 padding=True,
                 truncation=True,
-                max_length=self.max_length,
+                max_length=self._inference_max_length,
                 return_tensors="pt",
             ).to(self.device)
 

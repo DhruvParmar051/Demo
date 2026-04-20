@@ -4,8 +4,8 @@ AegisRAG - CGAL Loop Engine
 Orchestrates the bounded Confidence-Gated Action Loop.
 
 FIX 3: Query embedding is cached and only recomputed when the query
-       string actually changes, eliminating redundant encoder calls
-       across CGAL iterations.
+    string actually changes, eliminating redundant encoder calls
+        across CGAL iterations.
 FIX 8: max_seq_length correctly read from training config field.
 """
 
@@ -279,6 +279,7 @@ class CGALLoopEngine:
                 query=refined_query,
                 top_k=self.top_k,
                 alpha=alpha,
+                query_embedding=query_emb,
             )
             retrieved = [
                 (c, s) for (c, s) in retrieved if c.chunk_id not in seen_chunk_ids
@@ -589,12 +590,25 @@ class CGALLoopEngine:
             )
         )
         return response
+    
+    
 
 
 # ----------------------------------------------------------------------
 # Module-level helpers
 # ----------------------------------------------------------------------
 
+async def _ensure_async_iter(obj: Any) -> AsyncIterator[str]:
+        if hasattr(obj, "__aiter__"):
+            async for tok in obj:
+                yield str(tok)
+            return
+        if hasattr(obj, "__iter__"):
+            for tok in obj:
+                yield str(tok)
+            return
+        
+        yield str(obj)
 
 def _build_citations(
     reranked: list[tuple[ChunkRecord, float]],
@@ -634,13 +648,6 @@ async def _run_verify_async(
     return result
 
 
-async def _ensure_async_iter(obj: Any) -> AsyncIterator[str]:
-    if hasattr(obj, "__aiter__"):
-        async for tok in obj:
-            yield str(tok)
-        return
-    if hasattr(obj, "__iter__"):
-        for tok in obj:
-            yield str(tok)
-        return
-    yield str(obj)
+
+
+
