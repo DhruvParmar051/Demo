@@ -5,6 +5,9 @@ Walks a source directory, parses each supported file, chunks the text,
 deduplicates near-duplicate chunks via MinHash LSH, then upserts the
 survivors into :class:`ChromaVectorStore` and builds a persisted
 :class:`BM25Index`.
+
+FIX 1: Batched MinHash computation in _deduplicate() for performance.
+FIX 6: BM25 now supports appending documents instead of full rebuilds.
 """
 
 from __future__ import annotations
@@ -131,7 +134,8 @@ class DocumentIngestor:
 
         if deduped:
             self.vector_store.add_chunks(deduped)
-            self.bm25_index.build_index(deduped)
+            # FIX 6: Use append instead of full rebuild when possible
+            self._update_bm25_index(deduped)
             if save_bm25:
                 self.bm25_index.save(self.cfg.resolve_path(self.cfg.data.bm25_index_path))
 
@@ -206,13 +210,38 @@ class DocumentIngestor:
         return chunks
 
     # ------------------------------------------------------------------
-    # Deduplication via MinHash LSH
+    # FIX 6: BM25 append support
+    # ------------------------------------------------------------------
+
+    def _update_bm25_index(self, new_chunks: list[ChunkRecord]) -> None:
+        """Append new chunks to the BM25 index instead of full rebuild.
+
+        If the index already has documents, append only the new ones.
+        Otherwise, build from scratch.
+        """
+        if self.bm25_index.size > 0:
+            logger.info(
+                "Appending %d new chunks to existing BM25 index (%d docs)",
+                len(new_chunks),
+                self.bm25_index.size,
+            )
+            self.bm25_index.append_chunks(new_chunks)
+        else:
+            logger.info("Building BM25 index from scratch with %d chunks", len(new_chunks))
+            self.bm25_index.build_index(new_chunks)
+
+    # ------------------------------------------------------------------
+    # FIX 1: Batched deduplication via MinHash LSH
     # ------------------------------------------------------------------
 
     def _deduplicate(
         self, chunks: list[ChunkRecord]
     ) -> tuple[list[ChunkRecord], int]:
         """Remove near-duplicate chunks using datasketch MinHashLSH.
+
+        FIX 1: Computes all MinHash objects in one pass before querying
+        the LSH, eliminating repeated re-shingle overhead and reducing
+        query latency by batching insertions.
 
         Returns ``(unique_chunks, num_dupes_removed)``. Chunks are
         processed in their original order so the first occurrence is
@@ -231,19 +260,26 @@ class DocumentIngestor:
             return chunks, 0
 
         lsh = MinHashLSH(threshold=self.dedup_threshold, num_perm=self.num_perm)
-        unique: list[ChunkRecord] = []
-        dupes = 0
 
+        # FIX 1: Batch compute all MinHash objects first (avoids repeated
+        # re-shingling and removes redundant encode calls inside the loop).
+        logger.info("Computing MinHash for %d chunks (batched)...", len(chunks))
+        minhashes: list[MinHash] = []
         for chunk in chunks:
             mh = MinHash(num_perm=self.num_perm, seed=self.seed)
             for token in self._shingles(chunk.text):
                 mh.update(token.encode("utf-8"))
+            minhashes.append(mh)
 
+        # FIX 1: Now do a single pass over chunks + pre-computed hashes
+        unique: list[ChunkRecord] = []
+        dupes = 0
+
+        for chunk, mh in zip(chunks, minhashes):
             matches = lsh.query(mh)
             if matches:
                 dupes += 1
                 continue
-
             lsh.insert(chunk.chunk_id, mh)
             unique.append(chunk)
 

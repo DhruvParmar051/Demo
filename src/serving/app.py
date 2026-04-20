@@ -9,6 +9,10 @@ Endpoints:
     GET  /health            -- health + device info
     GET  /tickets           -- escalation tickets from the audit log
     GET  /metrics           -- Prometheus-format metrics
+
+FIX 10: SSE streaming now emits periodic heartbeat comments to prevent
+client-side timeout. Heartbeat interval is read from
+``cfg.serving.sse_heartbeat_interval`` (default 15 seconds).
 """
 
 from __future__ import annotations
@@ -35,6 +39,7 @@ from src.utils.config import get_config
 from src.utils.device import get_device_string
 from src.serving.ingest_router import build_ingest_router
 from loguru import logger
+
 
 # ----------------------------------------------------------------------
 # Pipeline registry (lazy)
@@ -79,18 +84,7 @@ class PipelineRegistry:
 
 
 def create_app(config: Any = None, model_tag: str | None = None) -> Any:
-    """Build and return the FastAPI application.
-
-    Parameters
-    ----------
-    config : object, optional
-        Parsed config (e.g. from :func:`get_config`). If ``None``, falls back
-        to ``get_config()``.
-    model_tag : str, optional
-        Default model tag to warm on startup. If provided, the registry will
-        eagerly build this pipeline on the first request path rather than
-        lazy-building. Accepted values: ``b1``, ``b2``, ``b3``, ``m1``..``m5``.
-    """
+    """Build and return the FastAPI application."""
     try:
         from fastapi import FastAPI, HTTPException, Query, Request  # type: ignore
         from fastapi.middleware.cors import CORSMiddleware  # type: ignore
@@ -123,6 +117,11 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
     registry = PipelineRegistry(cfg)
 
     default_tag = (model_tag or "m5").lower()
+
+    # FIX 10: Read heartbeat interval from config
+    sse_heartbeat_interval: float = float(
+        getattr(cfg.serving, "sse_heartbeat_interval", 15)
+    )
 
     class QueryRequest(BaseModel):
         query: str = Field(..., min_length=1, max_length=8192)
@@ -179,23 +178,47 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
 
         pipeline = await registry.get(req.model_tag)
         engine = getattr(pipeline, "engine", None) or pipeline
+
+        # FIX 10: Heartbeat task to prevent client timeout during long
+        # inference. Sends SSE comment lines (": heartbeat\n\n") every
+        # sse_heartbeat_interval seconds while the main generator is running.
+        heartbeat_queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        async def _heartbeat_sender() -> None:
+            """Emit heartbeat SSE comments at a fixed interval."""
+            while True:
+                await asyncio.sleep(sse_heartbeat_interval)
+                await heartbeat_queue.put(f": heartbeat\n\n")
+
         async def _gen():
             t_start = time.perf_counter()
             final: QueryResponse | None = None
             verify_emitted = False
+
+            # FIX 10: Start heartbeat background task
+            heartbeat_task = asyncio.create_task(_heartbeat_sender())
+
             try:
-                # Prefer engine's async streamer if present.
                 stream_fn = getattr(engine, "_run_streaming", None) or getattr(
                     engine, "run_streaming", None
                 )
                 if stream_fn is not None:
                     agen = stream_fn(req.query)
-                    # If stream_fn is an async function (not an async
-                    # generator), calling it returns a coroutine we must
-                    # await to get the actual async iterator.
                     if asyncio.iscoroutine(agen):
                         agen = await agen
-                    async for ev in agen:
+
+                    async def _drain_agen():
+                        async for ev in agen:
+                            yield ev
+
+                    # FIX 10: Interleave heartbeats with real events
+                    async for ev in _drain_agen():
+                        # Flush any pending heartbeats first
+                        while not heartbeat_queue.empty():
+                            hb = heartbeat_queue.get_nowait()
+                            if hb:
+                                yield hb
+
                         etype = ev.get("type", "token")
                         data = ev.get("data")
                         if etype == "token":
@@ -213,19 +236,32 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
                             final_dict = data if isinstance(data, dict) else {}
                             yield format_sse(EVENT_DONE, final_dict)
                 else:
-                    response: QueryResponse = await asyncio.to_thread(
-                        pipeline.run, req.query
+                    # Non-streaming path: emit a heartbeat while waiting
+                    response_task = asyncio.create_task(
+                        asyncio.to_thread(pipeline.run, req.query)
                     )
+                    while not response_task.done():
+                        await asyncio.sleep(min(1.0, sse_heartbeat_interval))
+                        yield f": heartbeat\n\n"
+                    response: QueryResponse = await response_task
                     final = response
                     yield format_sse(EVENT_TOKEN, {"text": response.answer})
                     for c in response.citations:
                         yield format_sse(EVENT_CITATION, c.to_dict())
                     yield format_sse(EVENT_DONE, response.to_dict())
+
             except Exception as exc:
                 logger.exception("stream failed")
                 yield format_sse(EVENT_ERROR, {"message": str(exc),
                                                 "type": exc.__class__.__name__})
             finally:
+                # FIX 10: Cancel heartbeat task when streaming ends
+                heartbeat_task.cancel()
+                try:
+                    await heartbeat_task
+                except asyncio.CancelledError:
+                    pass
+
                 if final is not None:
                     if final.latency_ms == 0.0:
                         final.latency_ms = (time.perf_counter() - t_start) * 1000.0
@@ -273,9 +309,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
 
     app.include_router(build_ingest_router(config))
 
-
     return app
 
 
-# Uvicorn entrypoint: ``uvicorn src.serving.app:app``.
 app = None  # populated by run.py

@@ -3,6 +3,11 @@ AuditLogger -- SQLite-backed append-only log for every served query.
 
 Writes one row per ``QueryResponse`` so we can (a) replay the evaluation
 set offline and (b) expose escalation tickets via ``GET /tickets``.
+
+FIX 9: Added retention policy — old entries are automatically deleted
+after a configurable number of days (default: 30). Pruning runs on
+each log() call with a low-overhead row-count check to avoid excessive
+I/O on every request.
 """
 
 from __future__ import annotations
@@ -11,13 +16,18 @@ import json
 import logging
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
 from src.data.schema import QueryResponse
 
 logger = logging.getLogger(__name__)
+
+# FIX 9: Default retention period in days
+_DEFAULT_RETENTION_DAYS = 30
+# FIX 9: How often to trigger pruning (every N writes) to limit I/O overhead
+_PRUNE_EVERY_N_WRITES = 100
 
 
 _SCHEMA = """
@@ -41,16 +51,28 @@ CREATE TABLE IF NOT EXISTS audit (
 );
 CREATE INDEX IF NOT EXISTS audit_session_idx ON audit(session_id);
 CREATE INDEX IF NOT EXISTS audit_ticket_idx ON audit(ticket_id);
+CREATE INDEX IF NOT EXISTS audit_timestamp_idx ON audit(timestamp);
 """
 
 
 class AuditLogger:
-    """Thread-safe sqlite audit log."""
+    """Thread-safe sqlite audit log with retention-based pruning.
 
-    def __init__(self, db_path: str | Path = "data/audit.sqlite") -> None:
+    FIX 9: Rows older than ``retention_days`` are deleted automatically.
+    Pruning is batched (runs every ``_PRUNE_EVERY_N_WRITES`` writes) to
+    avoid per-request overhead.
+    """
+
+    def __init__(
+        self,
+        db_path: str | Path = "data/audit.sqlite",
+        retention_days: int = _DEFAULT_RETENTION_DAYS,
+    ) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._retention_days = int(retention_days)
+        self._write_count = 0  # FIX 9: counter for throttled pruning
         self._conn = sqlite3.connect(
             str(self.db_path), check_same_thread=False
         )
@@ -99,6 +121,64 @@ class AuditLogger:
                 ),
             )
             self._conn.commit()
+
+            # FIX 9: Throttled pruning — run every N writes
+            self._write_count += 1
+            if self._write_count % _PRUNE_EVERY_N_WRITES == 0:
+                self._prune_old_entries()
+
+    # ------------------------------------------------------------------
+    # FIX 9: Retention policy
+    # ------------------------------------------------------------------
+
+    def _prune_old_entries(self) -> None:
+        """Delete audit rows older than ``_retention_days`` days.
+
+        Called inside the lock, so no additional locking is needed.
+        Tickets (rows with a non-null ticket_id) are preserved regardless
+        of age to maintain the escalation audit trail.
+        """
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=self._retention_days)
+        ).isoformat()
+        try:
+            cur = self._conn.execute(
+                "DELETE FROM audit WHERE timestamp < ? AND (ticket_id IS NULL OR ticket_id = '')",
+                (cutoff,),
+            )
+            deleted = cur.rowcount
+            self._conn.commit()
+            if deleted > 0:
+                logger.info(
+                    "AuditLogger: pruned %d rows older than %d days",
+                    deleted,
+                    self._retention_days,
+                )
+        except Exception as exc:
+            logger.warning("AuditLogger: pruning failed: %s", exc)
+
+    def prune_now(self, retention_days: int | None = None) -> int:
+        """Manually trigger a prune with an optional custom retention window.
+
+        Returns the number of rows deleted.
+        """
+        days = retention_days if retention_days is not None else self._retention_days
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=days)
+        ).isoformat()
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM audit WHERE timestamp < ? AND (ticket_id IS NULL OR ticket_id = '')",
+                (cutoff,),
+            )
+            deleted = cur.rowcount
+            self._conn.commit()
+        logger.info(
+            "AuditLogger.prune_now: deleted %d rows (retention=%d days)",
+            deleted,
+            days,
+        )
+        return deleted
 
     # ------------------------------------------------------------------
 

@@ -2,6 +2,8 @@
 AegisRAG - BM25 Sparse Retrieval Index
 
 Provides keyword-based retrieval using BM25Okapi from rank_bm25.
+
+FIX 6: Added append_chunks() method to add documents without full rebuild.
 """
 
 from __future__ import annotations
@@ -32,6 +34,9 @@ class BM25Index:
 
     Build with :meth:`build_index`, query with :meth:`query`, and
     persist / restore with :meth:`save` / :meth:`load`.
+
+    FIX 6: :meth:`append_chunks` adds documents incrementally without
+    discarding the existing index.
     """
 
     def __init__(self) -> None:
@@ -62,6 +67,43 @@ class BM25Index:
         self._bm25 = BM25Okapi(self._corpus_tokens)
 
         logger.info("BM25 index built with %d documents", len(self._chunks))
+
+    # ------------------------------------------------------------------
+    # FIX 6: Append without full rebuild
+    # ------------------------------------------------------------------
+
+    def append_chunks(self, new_chunks: list[ChunkRecord]) -> None:
+        """Append new chunks to the existing index without full rebuild.
+
+        Deduplicates by chunk_id so re-ingesting the same document is safe.
+        Rebuilds the underlying BM25Okapi once over the combined corpus.
+
+        Parameters
+        ----------
+        new_chunks : list[ChunkRecord]
+            New chunks to add. Chunks whose ``chunk_id`` already exists
+            in the index are skipped.
+        """
+        if not new_chunks:
+            return
+
+        existing_ids = set(self._id_to_chunk.keys())
+        to_add = [c for c in new_chunks if c.chunk_id not in existing_ids]
+
+        if not to_add:
+            logger.info("append_chunks: all %d chunks already indexed", len(new_chunks))
+            return
+
+        self._chunks.extend(to_add)
+        self._id_to_chunk.update({c.chunk_id: c for c in to_add})
+        new_tokens = [_tokenize(c.text) for c in to_add]
+        self._corpus_tokens.extend(new_tokens)
+        # Rebuild BM25 over the combined corpus (BM25Okapi has no incremental API)
+        self._bm25 = BM25Okapi(self._corpus_tokens)
+
+        logger.info(
+            "BM25 index: appended %d chunks (total=%d)", len(to_add), len(self._chunks)
+        )
 
     # ------------------------------------------------------------------
     # Querying

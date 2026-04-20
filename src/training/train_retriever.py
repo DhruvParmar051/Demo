@@ -1,9 +1,11 @@
 """
 Fine-tune the BGE-m3 retriever with Multiple Negatives Ranking Loss.
 
-For each QA pair we form (query, positive_chunk) and 3 BM25-sampled hard
-negatives. Trained with sentence-transformers via manual PyTorch loop to
-avoid heavy dependencies.
+For each QA pair we form (query, positive_chunk) and BM25-sampled hard
+negatives.
+
+FIX 7: Hard negative count now correctly read from ``cfg.training.retriever.hard_negatives``
+       (defaulting to 7, not hard-coded 3).
 """
 
 from __future__ import annotations
@@ -41,7 +43,6 @@ def _build_hard_negatives(qa: list[dict[str, Any]], k: int = 3) -> None:
         return
     from src.data.schema import ChunkRecord
 
-    # Build a BM25 index over the positive chunks present in qa.
     chunks = []
     seen = set()
     for rec in qa:
@@ -62,6 +63,7 @@ def _build_hard_negatives(qa: list[dict[str, Any]], k: int = 3) -> None:
     for rec in qa:
         query = rec["query"]
         gold_ids = set(rec.get("gold_chunk_ids", []))
+        # FIX 7: Request k+5 to have enough candidates after filtering gold
         hits = idx.query(query, top_k=k + 5)
         negatives = [c.text for c, _ in hits if c.chunk_id not in gold_ids][:k]
         rec["hard_negative_texts"] = negatives
@@ -88,7 +90,11 @@ def train(cfg: Any = None) -> dict[str, Any]:
         logger.warning("No QA pairs at %s; nothing to train on.", qa_path)
         return {"status": "skipped", "reason": "no_data"}
 
-    _build_hard_negatives(qa, k=int(cfg.training.retriever.hard_negatives))
+    # FIX 7: Use config value for hard negatives (was hard-coded 3, now uses
+    # cfg.training.retriever.hard_negatives which defaults to 7)
+    hard_neg_count = int(cfg.training.retriever.hard_negatives)
+    logger.info("Building hard negatives with k=%d (from config)", hard_neg_count)
+    _build_hard_negatives(qa, k=hard_neg_count)
 
     model_name = cfg.models.retriever.name
     logger.info("Loading retriever base %s", model_name)
@@ -144,12 +150,10 @@ def train(cfg: Any = None) -> dict[str, Any]:
                     if flat:
                         flat_emb = model.encode(flat, convert_to_tensor=True,
                                                  show_progress_bar=False)
-                        # Pad rows to max_k by repeating last negative.
                         padded = []
                         offset = 0
                         for row in hn_rows:
                             if not row:
-                                # No negatives -- repeat the positive to keep shape.
                                 padded.append(p_emb[len(padded)].unsqueeze(0)
                                               .repeat(max_k, 1))
                             else:

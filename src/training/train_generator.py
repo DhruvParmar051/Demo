@@ -5,9 +5,9 @@ Uses TRL's SFTTrainer with a custom ``compute_loss`` override that routes
 through :class:`CitationWeightedCELoss` so citation-marker tokens are
 upweighted relative to plain tokens.
 
-CPU-only machines cannot realistically run this. In that case the trainer
-logs a warning and returns ``{"status": "skipped", "reason": "cpu_only"}``
-so downstream scripts don't crash.
+FIX 8: ``max_seq_length`` is now correctly read from
+``cfg.training.generator_sft.max_seq_length`` (was incorrectly referencing
+``cfg.models.generator.max_seq_length``).
 """
 
 from __future__ import annotations
@@ -119,7 +119,12 @@ def train(cfg: Any = None) -> dict[str, Any]:
     )
     model = get_peft_model(model, peft_cfg)
 
-    max_seq = int(cfg.models.generator.max_seq_length)
+    # FIX 8: Read max_seq_length from the correct training config field.
+    # Previously this incorrectly used cfg.models.generator.max_seq_length
+    # (which is the inference max length), not the training config value.
+    tcfg = cfg.training.generator_sft
+    max_seq = int(tcfg.max_seq_length)
+    logger.info("Generator SFT max_seq_length=%d (from training config)", max_seq)
 
     def _tokenize(ex: dict[str, Any]) -> dict[str, Any]:
         text = ex["prompt"] + ex["response"] + tokenizer.eos_token
@@ -136,12 +141,11 @@ def train(cfg: Any = None) -> dict[str, Any]:
 
     ds = ds.map(_tokenize, remove_columns=["prompt", "response"])
 
-    tcfg = cfg.training.generator
     args = TrainingArguments(
         output_dir=str(Path(cfg.checkpoints.generator_sft)),
-        num_train_epochs=int(tcfg.epochs),
+        num_train_epochs=int(tcfg.num_epochs),
         per_device_train_batch_size=int(tcfg.batch_size),
-        gradient_accumulation_steps=int(tcfg.grad_accum),
+        gradient_accumulation_steps=int(tcfg.gradient_accumulation_steps),
         learning_rate=float(tcfg.learning_rate),
         warmup_ratio=float(tcfg.warmup_ratio),
         lr_scheduler_type="cosine",
@@ -160,7 +164,6 @@ def train(cfg: Any = None) -> dict[str, Any]:
             labels = inputs.pop("labels")
             outputs = model(**inputs)
             logits = outputs.logits
-            # Shift for causal LM.
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
             loss = citation_loss(shift_logits, shift_labels, tokenizer)
