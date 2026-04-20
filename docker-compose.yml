@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aegisrag:latest
+    command: ["python", "run.py", "serve", "--model", "m5", "--port", "8000"]
+    environment:
+      - PYTHONPATH=/app
+      - AEGIS_DEVICE__PREFERRED_DEVICE=cpu
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./checkpoints:/app/checkpoints
+    restart: unless-stopped
+
+  demo:
+    image: aegisrag:latest
+    depends_on:
+      - api
+    command: ["streamlit", "run", "demo/app.py", "--server.port=8501",
+              "--server.address=0.0.0.0", "--", "--api", "http://api:8000"]
+    environment:
+      - PYTHONPATH=/app
+      - AEGISRAG_API=http://api:8000
+    ports:
+      - "8501:8501"
+    restart: unless-stopped

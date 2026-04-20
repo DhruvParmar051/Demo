@@ -1,0 +1,91 @@
+# =============================================================================
+# AegisRAG - Adaptive Alpha Fusion Configuration
+# Controls the learned dense/sparse weighting in hybrid retrieval
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Alpha Network Architecture
+# ---------------------------------------------------------------------------
+# The alpha network predicts the optimal fusion weight alpha in [0, 1] where:
+#   score = alpha * dense_score + (1 - alpha) * sparse_score
+# It conditions on query features to produce query-adaptive fusion weights.
+
+network:
+  input_features:
+    - "query_length"           # number of tokens in query
+    - "query_entropy"          # vocabulary entropy of query
+    - "avg_idf"                # average IDF of query terms
+    - "max_idf"                # max IDF of query terms
+    - "oov_ratio"              # out-of-vocabulary ratio vs BM25 vocab
+    - "query_embedding_norm"   # L2 norm of dense query embedding
+    - "query_type_onehot"      # one-hot: factoid / procedural / comparison / open
+  input_dim: 10                # total feature dimension after encoding
+  hidden_dim: 128
+  num_hidden_layers: 2
+  dropout: 0.1
+  activation: "gelu"
+  output_activation: "sigmoid" # ensures alpha in [0, 1]
+  batch_norm: true
+
+# ---------------------------------------------------------------------------
+# Training
+# ---------------------------------------------------------------------------
+training:
+  learning_rate: 1.0e-3
+  num_epochs: 15
+  batch_size: 128
+  warmup_ratio: 0.1
+  weight_decay: 1.0e-4
+  max_grad_norm: 1.0
+  optimizer: "adamw"
+  scheduler: "cosine"
+  loss: "mse"                  # MSE between predicted alpha and oracle alpha
+  seed: 42
+  output_dir: "checkpoints/alpha_network"
+  logging_steps: 20
+  save_steps: 200
+  eval_steps: 200
+  eval_split: 0.1
+  early_stopping_patience: 5
+  early_stopping_threshold: 1.0e-4
+
+# ---------------------------------------------------------------------------
+# Oracle Alpha Computation (for generating training labels)
+# ---------------------------------------------------------------------------
+# During data generation, we sweep alpha values and pick the one that
+# maximizes retrieval recall@k for each query.
+oracle:
+  alpha_sweep_values:
+    - 0.0
+    - 0.1
+    - 0.2
+    - 0.3
+    - 0.4
+    - 0.5
+    - 0.6
+    - 0.7
+    - 0.8
+    - 0.9
+    - 1.0
+  recall_at_k: 10              # optimize recall@10 for oracle
+  tie_breaking: "prefer_balanced"  # prefer_balanced | prefer_dense | prefer_sparse
+  smoothing: 0.05              # label smoothing on oracle alphas
+
+# ---------------------------------------------------------------------------
+# Inference Defaults
+# ---------------------------------------------------------------------------
+inference:
+  fallback_alpha: 0.5          # used if alpha network is not loaded
+  alpha_min: 0.1               # clamp minimum (always keep some dense signal)
+  alpha_max: 0.9               # clamp maximum (always keep some sparse signal)
+  cache_predictions: true
+  cache_ttl_seconds: 300
+
+# ---------------------------------------------------------------------------
+# Feature Extraction
+# ---------------------------------------------------------------------------
+features:
+  query_type_classifier: "rule_based"  # rule_based | learned
+  idf_source: "bm25_index"            # use BM25 index for IDF values
+  tokenizer: "BAAI/bge-m3"            # tokenizer for length / entropy
+  max_query_tokens: 128

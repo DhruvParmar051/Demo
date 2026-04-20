@@ -1,0 +1,154 @@
+# =============================================================================
+# AegisRAG - LoRA / DoRA Configuration
+# Fine-tuning settings for Generator SFT and DPO stages
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Shared LoRA Defaults (inherited by both SFT and DPO unless overridden)
+# ---------------------------------------------------------------------------
+defaults:
+  rank: 16
+  alpha: 32
+  dropout: 0.05
+  bias: "none"
+  use_dora: true
+  task_type: "CAUSAL_LM"
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  modules_to_save: null
+  fan_in_fan_out: false
+  init_lora_weights: true
+
+# ---------------------------------------------------------------------------
+# Generator SFT LoRA
+# ---------------------------------------------------------------------------
+generator_sft:
+  rank: 16
+  alpha: 32
+  dropout: 0.05
+  use_dora: true
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  learning_rate: 2.0e-4
+  num_epochs: 3
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  max_seq_length: 2048
+  packing: false
+  output_dir: "checkpoints/generator_sft"
+  logging_steps: 50
+  save_steps: 500
+  eval_steps: 500
+
+# ---------------------------------------------------------------------------
+# DPO LoRA (applied on top of SFT adapter)
+# ---------------------------------------------------------------------------
+dpo:
+  rank: 8                     # Lower rank for DPO to avoid overfitting
+  alpha: 16
+  dropout: 0.05
+  use_dora: true
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  learning_rate: 5.0e-5
+  num_epochs: 1
+  batch_size: 2
+  gradient_accumulation_steps: 16
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  max_seq_length: 2048
+  max_prompt_length: 1024
+  beta: 0.1                   # DPO KL penalty coefficient
+  loss_type: "sigmoid"         # sigmoid | hinge | ipo
+  reference_free: false        # whether to skip reference model
+  sft_adapter_path: "checkpoints/generator_sft"  # base adapter to load before DPO
+  output_dir: "checkpoints/dpo"
+  logging_steps: 50
+  save_steps: 200
+  eval_steps: 200
+
+  # 6-type preference alignment categories
+  preference_types:
+    factual_grounding:
+      weight: 1.0
+      description: "Prefer responses grounded in retrieved context"
+    citation_accuracy:
+      weight: 1.0
+      description: "Prefer responses with accurate source citations"
+    refusal_calibration:
+      weight: 0.8
+      description: "Prefer appropriate refusal when context is insufficient"
+    tone_formality:
+      weight: 0.6
+      description: "Prefer professional customer-support tone"
+    completeness:
+      weight: 0.9
+      description: "Prefer responses that fully address the query"
+    safety_compliance:
+      weight: 1.0
+      description: "Prefer responses that avoid harmful or disallowed content"
+
+# ---------------------------------------------------------------------------
+# Decomposer LoRA (lightweight adapter for query decomposition)
+# ---------------------------------------------------------------------------
+decomposer:
+  rank: 8
+  alpha: 16
+  dropout: 0.05
+  use_dora: true
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+  learning_rate: 2.0e-4
+  num_epochs: 2
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  max_seq_length: 1024
+  output_dir: "checkpoints/decomposer"
+
+# ---------------------------------------------------------------------------
+# Quantization (QLoRA via bitsandbytes)
+# ---------------------------------------------------------------------------
+quantization:
+  load_in_4bit: true
+  load_in_8bit: false
+  bnb_4bit_quant_type: "nf4"
+  bnb_4bit_compute_dtype: "float16"
+  bnb_4bit_use_double_quant: true
+
+# ---------------------------------------------------------------------------
+# Adapter Merging (for GGUF export after training)
+# ---------------------------------------------------------------------------
+merging:
+  merge_sft_before_dpo: true           # merge SFT adapter into base before DPO
+  export_merged_model: true
+  export_format: "safetensors"         # safetensors | pytorch
+  gguf_quantization: "q4_k_m"         # quantization level for llama.cpp export
+  gguf_output_dir: "checkpoints/generator"

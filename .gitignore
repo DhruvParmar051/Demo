@@ -1,0 +1,100 @@
+# =============================================================================
+# AegisRAG .gitignore
+# =============================================================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- Virtual Environments ---
+venv/
+.venv/
+env/
+ENV/
+.conda/
+
+# --- Environment Variables ---
+.env
+.env.local
+.env.*.local
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Model Weights & Checkpoints ---
+checkpoints/
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+
+# --- Data (large files) ---
+data/vectordb/
+data/bm25_index.pkl
+data/audit.db
+data/raw_docs/
+data/processed/
+data/synthetic/
+
+# --- Logs ---
+logs/
+*.log
+
+# --- Cache ---
+.cache/
+*.pkl
+*.pickle
+
+# --- HuggingFace ---
+models--*/
+
+# --- Distribution ---
+*.tar.gz
+*.zip
+
+# --- Testing ---
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# --- Misc ---
+*.bak
+*.tmp
+*.temp
+wandb/
+mlruns/
+
+# --- graphify ---
+graphify-out
+
+# --- Claude ---
+CLAUDE.md
+.claude
