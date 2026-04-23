@@ -5,16 +5,15 @@ For each input query: retrieve the top-k evidence chunks, prompt the
 generator to answer using only those chunks, then score that answer
 against the gold answer via a fast NLI-based similarity score.
 
-FIX 2: Replaced BERTScore (roberta-large) with a faster DeBERTa MNLI
-cross-encoder for similarity scoring. Added batching to avoid OOM and
-improve throughput.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from multiprocessing import pool
 import random
+import torch
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -29,6 +28,14 @@ _DEFAULT_FAST_MODEL = "cross-encoder/nli-deberta-v3-small"
 # FIX 2: Batch size for scoring to avoid OOM
 _SCORE_BATCH_SIZE = 32
 
+
+def get_best_device() -> str:
+    if torch.cuda.is_available():
+        return "cuda"
+    elif torch.backends.mps.is_available():
+        return "mps"
+    else:
+        return "cpu"
 
 class ConfidenceLabelGenerator:
     """Produce soft-label confidence examples using fast NLI similarity.
@@ -54,6 +61,8 @@ class ConfidenceLabelGenerator:
         Batch size for NLI scoring (FIX 2).
     """
 
+
+
     def __init__(
         self,
         retriever: Any,
@@ -63,10 +72,12 @@ class ConfidenceLabelGenerator:
         seed: int = 42,
         limit: int | None = None,
         score_batch_size: int = _SCORE_BATCH_SIZE,
+        device: str | None = None,
     ) -> None:
         set_seed(seed)
         self.seed = seed
         self.rng = random.Random(seed)
+        self.device = device or get_best_device()
 
         cfg = get_config()
         self.cfg = cfg
@@ -112,7 +123,10 @@ class ConfidenceLabelGenerator:
         gold_answers: list[str] = []
         top5_ids: list[list[str]] = []
 
-        for qa in pool:
+        total = len(pool)
+
+        for idx, qa in enumerate(pool, 1):
+            logger.info(f"[{idx}/{total}] Processing query: {qa.query[:80]}...")
             try:
                 retrieved = self.retriever.retrieve(qa.query, top_k=self.top_k)
             except Exception as exc:
@@ -237,7 +251,8 @@ class ConfidenceLabelGenerator:
                 "Install with: pip install sentence-transformers"
             ) from exc
         logger.info("Loading fast NLI model: %s", _DEFAULT_FAST_MODEL)
-        self._nli_model = CrossEncoder(_DEFAULT_FAST_MODEL, max_length=512)
+        self._nli_model = CrossEncoder(_DEFAULT_FAST_MODEL, max_length=512, device=self.device)
+        logger.info(f"Initialized Generator on DEVICE: {self.device}")
         return self._nli_model
 
     # ------------------------------------------------------------------

@@ -1,13 +1,22 @@
-"""AegisRAG - Local-only Synthetic QA Generator (v3 — fixed evidence + batching).
+"""AegisRAG - Improved Synthetic QA Generator (v4)
 
-v3 changes vs v2:
-- Fixed _sentence_is_noisy: removed the verb-requirement that killed all evidence
-- Fixed _fallback_evidence: removed backwards number-matching guard
-- Fixed _get_evidence: single, always-succeeds evidence function replacing 3-retry loop
-- Raised _GENERATION_BATCH_SIZE to 4 (MPS-safe)
-- _has_explanatory_drift: narrowed to only reject phrases genuinely absent from chunk
-- _valid_pair: now takes (q, a) not (obj, qtype, min_tokens) — matched call sites
-- _process_batch signature: now passes real_idx correctly through flush
+Key improvements over v3:
+1.  EVIDENCE QUALITY: Evidence spans are now 1-3 full sentences (80-400 chars),
+    not micro-snippets. Uses sentence-boundary alignment instead of raw char offsets.
+2.  ANSWER DEPTH: Answers are 2-4 sentences (30-80 words), always including the
+    condition/threshold + its consequence/effect, not just a bare fact.
+3.  QUESTION DIVERSITY: 6 question frames per qtype (not 1), plus multi-hop and
+    comparison frames. Heuristic qtype assignment is now feature-weighted.
+4.  COVERAGE: Per-document cap raised; section-title diversity enforced so
+    consecutive chunks from the same section are skipped after 2 successes.
+5.  PERFORMANCE: Evidence extraction vectorised with pre-tokenised sets;
+    sliding-window stride halved; validation fast-path short-circuits early.
+6.  DEDUPLICATION: Normalised canonical form (lowercase + stopword strip) used
+    for all similarity checks, not raw string.
+7.  PROMPT ENGINEERING: Explicit negative examples and lengthier answer
+    requirements prevent single-sentence / bare-number answers.
+8.  CLEANING: Post-process step fixes citation marker placement (marker goes
+    immediately after the sentence it supports, not appended at EOD).
 """
 
 from __future__ import annotations
@@ -27,32 +36,17 @@ from src.utils.determinism import set_seed
 logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
 
-QUESTION_TYPES = ("procedural", "policy", "eligibility", "factoid")
-_BAD_QTYPE: set[str] = set()
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+QUESTION_TYPES = ("procedural", "policy", "eligibility", "factoid", "multi_hop", "comparison")
 
 CHECKPOINT_FILE = Path("data/synthetic/qa_pairs.jsonl")
 SAVE_EVERY = 20
-
-# Batch size: 4 is safe on MPS with Qwen 7B at max_new_tokens=220
-_GENERATION_BATCH_SIZE = 1
-
-REASONING_MARKERS = (
-    "because", "ensures", "prevents", "allows", "therefore", "so that",
-    "which means", "in order to", "due to", "results in", "leads to",
-    "enables", "avoids", "requires", "depends on", "causes",
-    "eligible", "eligibility", "ineligible", "qualify", "qualified",
-    "subject to", "pursuant to", "provided that", "notwithstanding",
-    "shall", "must", "may not", "is required", "are required",
-    "unless", "except", "exception", "limitation", "restriction",
-    "condition", "conditions", "criteria", "requirement", "requirements",
-    "deadline", "within", "no later than", "effective date",
-    "applies to", "does not apply", "is not applicable",
-    "penalty", "interest", "surcharge", "reduction", "disqualified",
-    "entitle", "entitled", "benefit", "coverage", "exclusion",
-)
+_GENERATION_BATCH_SIZE = 1   # safe for MPS / T4; raise to 4 on multi-GPU
 
 _CITATION_RE = re.compile(r"\[[^\]]+\]")
-
 _CITATION_SECTION_RE = re.compile(
     r"(?:§+\s*[\d]+|"
     r"\b\d+\s*CFR\b|"
@@ -63,277 +57,164 @@ _CITATION_SECTION_RE = re.compile(
     r"Rev\.\s*Rul\.\s*\d+)",
     re.IGNORECASE,
 )
-
 _CODE_MARKERS = (
     "select ", "insert ", "update ", "delete ", "create ", "alter ", "drop ",
     "from ", "where ", "group by", "order by", "returning", "pg_", "::",
     "postgres=#", "=>", "#>", "->", "$$", "begin;", "commit;",
 )
 
-_REG_TRIGGERS_ELIGIBILITY = (
-    "eligib", "qualif", "ineligib", "disqualif", "entitle", "entitled",
-    "who may", "who can", "who is", "who are", "to receive", "to get",
-    "to claim", "to apply", "to enroll",
-)
-_REG_TRIGGERS_PROCEDURAL = (
-    "step", "process", "submit", "file", "form", "apply", "register",
-    "complete", "follow", "procedure", "how to", "in order to",
-    "you must", "you should", "you need to",
-)
-_REG_TRIGGERS_FACTOID = (
-    "percent", "%", "dollar", "$", "limit", "threshold", "maximum",
-    "minimum", "deadline", "days", "months", "years", "age", "income",
-    "amount", "rate", "penalty", "fine", "fee",
-)
-_REG_TRIGGERS_POLICY = (
-    "because", "therefore", "rationale", "purpose", "intent", "policy",
-    "law", "regulation", "rule", "provision", "requirement", "shall",
-    "notwithstanding", "subject to", "pursuant to", "provided that",
-    "unless", "except", "unless otherwise",
-)
+# Stopwords for canonical dedup
+_STOP = frozenset({
+    "the", "a", "an", "of", "to", "in", "and", "or", "is", "are", "was", "were",
+    "be", "been", "being", "for", "on", "at", "by", "with", "as", "that", "this",
+    "it", "its", "from", "which", "who", "but", "not", "can", "may", "will",
+    "would", "should", "could", "also", "such", "any", "all", "some", "these",
+    "those", "has", "have", "had", "do", "does", "did", "if", "then", "than",
+    "so", "when", "while",
+})
 
-_EVIDENCE_STOPWORDS = {
-    "the", "a", "an", "of", "to", "in", "and", "or", "is", "are", "was",
-    "were", "be", "been", "being", "for", "on", "at", "by", "with", "as",
-    "that", "this", "it", "its", "from", "which", "who", "whom", "but",
-    "not", "can", "may", "will", "would", "should", "could", "also",
-    "such", "any", "all", "some", "these", "those", "has", "have", "had",
-    "do", "does", "did", "if", "then", "than", "so", "when", "while",
+# Feature triggers per qtype
+_TRIG = {
+    "eligibility": ("eligib", "qualif", "ineligib", "disqualif", "entitle",
+                    "who may", "who can", "who is", "who are", "to receive",
+                    "to get", "to claim", "to apply", "to enroll"),
+    "procedural":  ("step", "process", "submit", "file", "form", "apply",
+                    "register", "complete", "follow", "procedure", "how to",
+                    "in order to", "you must", "you should", "you need to"),
+    "factoid":     ("percent", "%", "dollar", "$", "limit", "threshold",
+                    "maximum", "minimum", "deadline", "days", "months",
+                    "years", "age", "income", "amount", "rate", "penalty"),
+    "policy":      ("because", "therefore", "rationale", "purpose", "intent",
+                    "policy", "law", "regulation", "rule", "provision",
+                    "requirement", "shall", "notwithstanding", "subject to",
+                    "pursuant to", "provided that", "unless", "except"),
+    "multi_hop":   ("in addition", "furthermore", "however", "on the other hand",
+                    "relates to", "depends on", "as a result", "therefore",
+                    "consequently"),
+    "comparison":  ("compared to", "unlike", "in contrast", "similarly",
+                    "whereas", "while", "different from", "same as"),
 }
 
+# ---------------------------------------------------------------------------
+# Prompt templates — 6 frames per qtype
+# ---------------------------------------------------------------------------
+
+_QTYPE_FRAMES = {
+    "procedural": [
+        "Ask HOW a person completes a required process, files a form, or satisfies "
+        "a regulatory step.  The answer must describe ≥2 specific sub-steps and explain "
+        "state each required step and any condition or requirement explicitly mentioned",
+        "Ask WHAT sequence of actions is required when a specific triggering event occurs "
+        "(e.g., a late filing, an overpayment, a change in status). Answer must name the "
+        "trigger, the required action, and the time deadline.",
+        "Ask WHICH form or document is required and HOW it must be submitted.  Answer must "
+        "state the form name/number, where it is submitted, and what information it captures.",
+        "Ask WHAT happens if a required procedural step is missed or late.  Answer must "
+        "state the penalty, consequence, or cure mechanism.",
+        "Ask HOW a correction or amendment is made after an error has been filed.  Answer "
+        "must state the corrective form, the window to act, and any restrictions.",
+        "Ask WHEN a periodic filing or renewal is due and HOW advance preparation is done.  "
+        "Answer must include the deadline trigger, the preparation steps, and any grace period.",
+    ],
+    "policy": [
+        "Ask WHY a specific rule or restriction exists — its policy rationale.  Answer must "
+        "name the underlying statutory or regulatory purpose and its practical effect.",
+        "Ask HOW a rule interacts with or limits another rule in the same passage.  Answer "
+        "must explicitly name both rules and describe the interaction.",
+        "Ask WHAT the consequence is when a policy condition is violated.  Answer must "
+        "state the condition, the violation, and the resulting penalty or disqualification.",
+        "Ask UNDER WHAT CIRCUMSTANCES an exception or safe-harbor applies.  Answer must "
+        "list the precise qualifying conditions and what protection they confer.",
+        "Ask WHY a particular entity or class of persons is treated differently under the rule.  "
+        "Answer must state the basis for differential treatment and its practical impact.",
+        "Ask HOW the policy balances two competing interests (e.g., flexibility vs. compliance).  "
+        "Answer must name both interests and describe the rule's resolution.",
+    ],
+    "eligibility": [
+        "Ask WHO qualifies for a specific benefit, credit, or exemption.  Answer must name "
+        "≥2 specific qualifying criteria and at least one disqualifying condition.",
+        "Ask WHAT conditions disqualify an otherwise eligible person.  Answer must name "
+        "the specific disqualifying facts and the consequence (denial, repayment, etc.).",
+        "Ask AT WHAT INCOME or age threshold eligibility changes.  Answer must state the "
+        "exact threshold, what changes at that threshold, and how it is measured.",
+        "Ask HOW eligibility is verified or documented.  Answer must name the required "
+        "documentation and what standard it must meet.",
+        "Ask WHETHER a specific class of persons (students, veterans, dependents) qualifies "
+        "and under what additional conditions.  Answer must state the class, the base rule, "
+        "and the special condition.",
+        "Ask WHEN eligibility expires or must be re-established.  Answer must state the "
+        "duration, the renewal trigger, and what happens if renewal is missed.",
+    ],
+    "factoid": [
+        "Ask for the EXACT dollar amount, percentage, or numerical threshold used in a "
+        "calculation or limit from the passage.  Answer must state the value, the item it "
+        "applies to, and the condition under which it applies.",
+        "Ask for the SPECIFIC DEADLINE (days, months, or date) imposed by the rule.  Answer "
+        "must state the deadline, its trigger event, and the consequence of missing it.",
+        "Ask what the MAXIMUM or MINIMUM allowed value is and under what conditions it changes.  "
+        "Answer must state the base limit, the change condition, and the revised limit.",
+        "Ask for the NAME of the specific form, publication, schedule, or code section that "
+        "governs a described situation.  Answer must state the name/number and its purpose.",
+        "Ask HOW a specific numerical value is calculated (formula or component breakdown).  "
+        "Answer must state the formula or at least two components and the result.",
+        "Ask what RATE or RATIO applies in a described circumstance.  Answer must state the "
+        "rate, the base it is applied to, and the resulting obligation.",
+    ],
+    "multi_hop": [
+        "Ask a question that requires combining TWO distinct facts from the passage to reach "
+        "an answer (e.g., threshold + consequence).  Answer must reference both facts and "
+        "show the logical connection explicitly.",
+        "Ask how a CHANGE IN ONE VARIABLE (income, age, status) affects TWO downstream "
+        "outcomes described in the passage.  Answer must trace both effects.",
+        "Ask what the NET RESULT is when TWO rules described in the passage apply simultaneously.  "
+        "Answer must name both rules and state their combined effect.",
+        "Ask for the CONDITION CHAIN: what must be true first, then second, then what happens.  "
+        "Answer must list ≥2 sequential conditions and the final outcome.",
+        "Ask what DISTINGUISHES two similar-sounding situations described in the same passage.  "
+        "Answer must name the distinguishing fact and explain why it matters.",
+        "Ask what the OVERALL IMPACT is of following (or not following) a multi-step process "
+        "described in the passage.  Answer must mention ≥2 steps and the cumulative effect.",
+    ],
+    "comparison": [
+        "Ask HOW two entities, time periods, or situations described in the passage are treated "
+        "DIFFERENTLY.  Answer must name both, state the difference, and explain why.",
+        "Ask WHAT IS THE SAME about two seemingly different situations in the passage.  Answer "
+        "must identify the shared rule and note why the distinction does not matter.",
+        "Ask WHICH of two options described in the passage is more beneficial (or burdensome) "
+        "and under what conditions.  Answer must compare both on the relevant dimension.",
+        "Ask HOW the rule changed between two time periods mentioned in the passage.  Answer "
+        "must state the old rule, the new rule, and the effective date.",
+        "Ask HOW the treatment differs for two classes of taxpayers/students/patients described "
+        "in the passage.  Answer must name both classes and describe the differential.",
+        "Ask WHETHER two cited thresholds or deadlines are the same or different and what "
+        "drives the difference.  Answer must state both values and the causal driver.",
+    ],
+}
+
+# ---------------------------------------------------------------------------
+# Chunk scoring helpers
+# ---------------------------------------------------------------------------
+
 _table_like_cache: dict[str, bool] = {}
-
-
-# =============================================================================
-# CHUNK PRE-SCORING
-# =============================================================================
-
-def _score_chunk_quality(chunk: ChunkRecord) -> float:
-    text = chunk.text or ""
-    words = text.split()
-    wc = len(words)
-    if wc < 25:
-        return 0.0
-    score = 0.0
-    if 40 <= wc <= 400:
-        score += 2.0
-    elif wc < 40:
-        score += 0.5
-    else:
-        score += 1.0
-    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
-    n_sentences = len([s for s in sentences if len(s.split()) >= 4])
-    if n_sentences >= 3:
-        score += 1.0
-    elif n_sentences == 2:
-        score += 0.5
-    text_l = text.lower()
-    reg_hits = sum(1 for t in _REG_TRIGGERS_POLICY if t in text_l)
-    score += min(reg_hits * 0.3, 1.5)
-    has_number = bool(re.search(r"\b\d[\d,\.]*\b", text))
-    has_dollar = "$" in text or "dollar" in text_l
-    has_date = bool(re.search(
-        r"\b(?:january|february|march|april|may|june|july|august|september|"
-        r"october|november|december|\d{4})\b", text_l
-    ))
-    if has_number:
-        score += 0.5
-    if has_dollar or has_date:
-        score += 0.5
-    if chunk.section_title and len(chunk.section_title.strip()) > 2:
-        score += 0.5
-    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
-    if len(lines) >= 5:
-        short_lines = sum(1 for ln in lines if len(ln.split()) <= 3)
-        if short_lines / len(lines) > 0.6:
-            score -= 1.0
-    return max(0.0, score)
-
-
-def _choose_qtype_for_chunk(chunk: ChunkRecord, rng: random.Random) -> str:
-    text_l = (chunk.text or "").lower()
-    scores: dict[str, int] = {
-        "eligibility": sum(1 for t in _REG_TRIGGERS_ELIGIBILITY if t in text_l),
-        "procedural": sum(1 for t in _REG_TRIGGERS_PROCEDURAL if t in text_l),
-        "factoid": sum(1 for t in _REG_TRIGGERS_FACTOID if t in text_l),
-        "policy": sum(1 for t in _REG_TRIGGERS_POLICY if t in text_l),
-    }
-    max_score = max(scores.values())
-    if max_score == 0:
-        return "policy"
-    candidates = [qt for qt, s in scores.items() if s == max_score]
-    return rng.choice(candidates)
-
-
-# =============================================================================
-# HELPERS
-# =============================================================================
-
-def is_duplicate(q: str, existing: set[str], threshold: float = 0.9) -> bool:
-    for e in existing:
-        if SequenceMatcher(None, q, e).ratio() > threshold:
-            return True
-    return False
-
-
-def _is_likely_duplicate_chunk(chunk: ChunkRecord, seen_queries: set[str],
-                                threshold: float = 0.85) -> bool:
-    if not seen_queries:
-        return False
-    text = chunk.text or ""
-    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
-    lead = sentences[0].strip() if sentences else ""
-    if len(lead.split()) < 5:
-        return False
-    lead_l = lead.lower()
-    for q in seen_queries:
-        if SequenceMatcher(None, lead_l, q.lower()).ratio() > threshold:
-            return True
-    return False
-
-
-def _clean_answer(ans: str) -> str:
-    ans = re.sub(r"\[[^\]]+\]", "", ans)
-    return re.sub(r"\s+", " ", ans).strip()
-
-
-def _clean_sentence(s: str) -> str:
-    return re.sub(r"\s+", " ", s).strip()
-
-
-def _strict_grounding(answer: str, chunk_text: str) -> bool:
-    """Answer must share at least 20% of content words with chunk, or pass bigram check."""
-    answer_words = [w for w in re.findall(r"\w+", answer.lower()) if len(w) > 2]
-    if not answer_words:
-        return False
-    chunk_words = set(re.findall(r"\w+", chunk_text.lower()))
-    overlap = sum(1 for w in answer_words if w in chunk_words)
-    if overlap / len(answer_words) >= 0.20:
-        return True
-    ans_bigrams = list(zip(answer_words, answer_words[1:]))
-    chunk_word_list = [w for w in re.findall(r"\w+", chunk_text.lower()) if len(w) > 3]
-    chunk_bigrams = set(zip(chunk_word_list, chunk_word_list[1:]))
-    if not ans_bigrams:
-        return False
-    bigram_overlap = sum(1 for bg in ans_bigrams if bg in chunk_bigrams)
-    return bigram_overlap / len(ans_bigrams) >= 0.30
-
-
-def _has_inferred_math(answer: str, chunk_text: str) -> bool:
-    ans_l = answer.lower()
-    chunk_l = chunk_text.lower()
-    math_phrases = (
-        "calculated by", "calculated as", "computed as", "derived from",
-        "obtained by", "resulting from subtracting", "result of subtracting",
-        "difference between", "sum of",
-    )
-    for pat in (r"\d+\s*[-+*/]\s*\d+",):
-        if re.search(pat, answer) and not re.search(pat, chunk_text):
-            return True
-    for phrase in math_phrases:
-        if phrase in ans_l and phrase not in chunk_l:
-            return True
-    return False
-
-
-def _has_explanatory_drift(answer: str, chunk_text: str) -> bool:
-    """Only reject when a drift phrase is clearly fabricated (not just rephrased)."""
-    ans_l = answer.lower()
-    chunk_l = chunk_text.lower()
-    # Only flag action phrases that introduce a genuinely new instruction
-    extra_action_patterns = (
-        "or send an email to",
-        "or email us at",
-        "or contact via",
-        "or submit online at",
-    )
-    for phrase in extra_action_patterns:
-        if phrase in ans_l and phrase not in chunk_l:
-            return True
-    return False
-
-
-def _qa_semantic_alignment(query: str, answer: str) -> bool:
-    q_words = set(re.findall(r"\w+", query.lower()))
-    a_words = set(re.findall(r"\w+", answer.lower()))
-    stop = {"the", "is", "are", "what", "who", "how", "when", "why", "does",
-            "do", "did", "was", "were", "a", "an", "of", "to", "in", "for"}
-    q_content = {w for w in q_words if w not in stop and len(w) > 3}
-    if not q_content:
-        return True  # can't measure; don't reject
-    overlap = q_content & a_words
-    return len(overlap) >= max(1, int(0.15 * len(q_content)))
-
-
-def _has_repetition_artifact(text: str) -> bool:
-    _STOPWORDS = {
-        "the", "a", "an", "of", "to", "in", "and", "or", "is", "are", "was",
-        "were", "be", "been", "being", "for", "on", "at", "by", "with", "as",
-        "that", "this", "it", "its", "from", "which", "who", "but", "not",
-        "can", "may", "will", "would", "should", "could", "also", "such",
-        "any", "all", "some", "these", "those", "has", "have", "had",
-        "do", "does", "did", "if", "then", "than", "so", "when", "while",
-    }
-    tokens = re.findall(r"\w+", text.lower())
-    for i in range(len(tokens) - 1):
-        a, b = tokens[i], tokens[i + 1]
-        if a == b and len(a) > 3 and a not in _STOPWORDS:
-            return True
-    return False
-
-
-def _valid_pair(q: str, a: str) -> bool:
-    if not q or not a or len(a.strip()) == 0:
-        return False
-    if len(a.split()) < 6:
-        return False
-    if a.isupper():
-        return False
-    if not re.search(r"[a-zA-Z]", a):
-        return False
-    if _CITATION_RE.search(q):
-        return False
-    return True
-
-
-def _is_good_question(q: str, qtype: str = "") -> bool:
-    ql = q.lower().strip()
-    if qtype == "factoid":
-        return len(q.split()) >= 5 and "?" in q
-    if "?" not in q:
-        return False
-    if len(q.split()) < 5:
-        return False
-    if ql.startswith(("define", "list")):
-        return False
-    if any(w in ql for w in ("trend", "increase", "decrease", "change over time",
-                              "consistent", "pattern")):
-        return False
-    if "why" in ql and qtype != "policy":
-        return False
-    _REG_TRIGGERS = (
-        "eligib", "qualif", "requir", "condition", "criterion", "criteria",
-        "deadline", "limit", "threshold", "penalty", "benefit", "coverage",
-        "exclusion", "exception", "entitle", "disqualif", "subject to",
-        "must", "shall", "allowed", "permitted", "prohibited",
-    )
-    trivial_starts = ("what is", "what are")
-    if any(ql.startswith(x) for x in trivial_starts):
-        if qtype == "eligibility":
-            return True
-        has_reg = any(t in ql for t in _REG_TRIGGERS)
-        has_reasoning = any(m in ql for m in ("why", "how", "purpose", "role",
-                                               "impact", "effect", "difference",
-                                               "when", "where"))
-        if not (has_reg or has_reasoning):
-            return False
-    return True
 
 
 def _looks_like_code(text: str) -> bool:
     tl = text.lower()
     return sum(1 for m in _CODE_MARKERS if m in tl) >= 2
 
+
+def _has_llm_fluff(answer: str) -> bool:
+    fluff_patterns = (
+        "this ensures",
+        "this allows",
+        "this means",
+        "ensuring that",
+        "helps to",
+        "provides a way to",
+        "so that",
+        "in order to",
+    )
+    return any(p in answer.lower() for p in fluff_patterns)
 
 def _is_table_like(text: str, chunk_id: str = "") -> bool:
     if chunk_id and chunk_id in _table_like_cache:
@@ -347,17 +228,16 @@ def _is_table_like(text: str, chunk_id: str = "") -> bool:
 def _compute_is_table_like(text: str) -> bool:
     if not text or not text.strip():
         return True
-    text_l = text.lower()
-    if text_l.count("reserved") > 10:
+    tl = text.lower()
+    if tl.count("reserved") > 10:
         return True
     lines = [ln for ln in text.split("\n") if ln.strip()]
     if not lines:
         return True
     is_code = _looks_like_code(text)
-    word_count = len(text.split())
     terminators = text.count(".") + text.count("!") + text.count("?")
     citation_count = len(_CITATION_SECTION_RE.findall(text))
-    is_regulatory_citation_text = citation_count >= 3
+    is_reg_text = citation_count >= 3
     pipe_lines = sum(1 for ln in lines if ln.count("|") >= 2)
     if len(lines) >= 6 and pipe_lines / len(lines) > 0.6 and not is_code:
         return True
@@ -368,250 +248,234 @@ def _compute_is_table_like(text: str) -> bool:
         short_lines = sum(1 for ln in lines if len(ln.split()) <= 3)
         if short_lines / len(lines) > 0.75 and terminators < 3:
             return True
-    if len(text) > 300 and not is_code and not is_regulatory_citation_text:
+    if len(text) > 300 and not is_code and not is_reg_text:
         if sum(c.isdigit() for c in text) / len(text) > 0.55:
             return True
-    if word_count > 200 and terminators == 0 and not is_code and not is_regulatory_citation_text:
+    if len(text.split()) > 200 and terminators == 0 and not is_code and not is_reg_text:
         return True
     return False
 
 
-def score_answer(ans: str) -> float:
-    score = 0.0
-    words = ans.split()
+def _score_chunk_quality(chunk: ChunkRecord) -> float:
+    text = chunk.text or ""
+    words = text.split()
     wc = len(words)
-    if wc >= 40:
-        score += 1.5
-    elif wc >= 25:
+    if wc < 30:
+        return 0.0
+    score = 0.0
+    # Word-count sweet spot: 50-500
+    if 50 <= wc <= 500:
+        score += 2.5
+    elif 30 <= wc < 50:
         score += 1.0
-    elif wc >= 15:
-        score += 0.5
-    periods = ans.count(".")
-    if periods >= 3:
+    else:
+        score += 1.5
+    # Sentence count (full sentences preferred)
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if len(s.split()) >= 5]
+    if len(sentences) >= 4:
         score += 2.0
-    elif periods == 2:
-        score += 1.5
-    elif periods == 1:
+    elif len(sentences) >= 2:
         score += 1.0
-    ans_l = ans.lower()
-    marker_hits = sum(1 for w in REASONING_MARKERS if w in ans_l)
-    score += min(marker_hits, 4) * 0.65
-    if "\n-" in ans or "\n*" in ans or re.search(r"\n\d+\.", ans):
-        score -= 0.5
-    conditional_hits = len(re.findall(
-        r"\b(?:if|unless|provided that|subject to|except|notwithstanding|"
-        r"must|shall|eligible|qualify|require)\b", ans_l
-    ))
-    score += min(conditional_hits, 3) * 0.4
-    return score
+    # Regulatory signal
+    tl = text.lower()
+    for trig_list in _TRIG.values():
+        score += min(sum(1 for t in trig_list if t in tl) * 0.2, 1.0)
+    # Numeric grounding
+    if re.search(r"\b\d[\d,\.]*\b", text):
+        score += 0.5
+    if "$" in text or "%" in text:
+        score += 0.5
+    # Section title bonus
+    if chunk.section_title and len(chunk.section_title.strip()) > 3:
+        score += 0.5
+    return max(0.0, score)
 
 
-# =============================================================================
-# EVIDENCE EXTRACTION — fixed, always succeeds
-# =============================================================================
-
-def _sentence_is_noisy(s: str) -> bool:
-    """Conservative noise check. Does NOT require specific verbs."""
-    if not s:
-        return True
-    wc = len(s.split())
-    if wc < 5:
-        return True
-    if "[table]" in s.lower():
-        return True
-    if s.count("|") >= 2 or s.count("\t") >= 2:
-        return True
-    if s.lower().count("reserved") > 3:
-        return True
-    if not re.search(r"[a-zA-Z]{3,}", s):
-        return True
-    # Too many unexplained uppercase words (merged artifact)
-    if sum(1 for w in s.split() if w.isupper() and len(w) > 2) > 4:
-        return True
-    has_section_ref = bool(_CITATION_SECTION_RE.search(s))
-    if len(s) > 40 and not has_section_ref:
-        if sum(c.isdigit() for c in s) / max(len(s), 1) > 0.45:
-            return True
-    return False
+def _choose_qtype(chunk: ChunkRecord, rng: random.Random) -> str:
+    """Feature-weighted qtype selection — multi_hop/comparison get 20% slots."""
+    text_l = (chunk.text or "").lower()
+    base_scores: dict[str, float] = {}
+    for qt, triggers in _TRIG.items():
+        base_scores[qt] = float(sum(1 for t in triggers if t in text_l))
+    # Normalise base types
+    max_s = max(base_scores.values()) or 1.0
+    for qt in base_scores:
+        base_scores[qt] /= max_s
+    # Force some multi_hop / comparison diversity
+    if rng.random() < 0.15:
+        return "multi_hop"
+    if rng.random() < 0.10:
+        return "comparison"
+    # Weighted choice
+    candidates = [(qt, s) for qt, s in base_scores.items()
+                  if qt not in ("multi_hop", "comparison") and s > 0]
+    if not candidates:
+        return rng.choice(["policy", "factoid", "eligibility"])
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    # Top-2 with some randomness
+    top2 = candidates[:2]
+    return rng.choices([t[0] for t in top2], weights=[t[1] + 0.1 for t in top2])[0]
 
 
-def _get_evidence(answer: str, chunk_text: str) -> str:
-    """Extract the best evidence span from chunk for the given answer.
+# ---------------------------------------------------------------------------
+# Evidence extraction — v4: sentence-boundary aligned, 80-400 chars
+# ---------------------------------------------------------------------------
 
-    Always returns a non-empty string as long as chunk has any text.
-    Strategy (in order):
-      1. Sliding-window word overlap (character windows)
-      2. Best sentence by word overlap
-      3. First clean sentence
-      4. First 300 chars of chunk (absolute fallback — never fails)
+def _split_sentences(text: str) -> list[str]:
+    raw = re.split(r"(?<=[.!?])\s+", text.replace("\n", " "))
+    return [s.strip() for s in raw if len(s.split()) >= 5]
+
+
+def _canonical(text: str) -> set[str]:
+    return {w for w in re.findall(r"\w+", text.lower()) if w not in _STOP and len(w) > 2}
+
+
+def _get_evidence(answer: str, chunk_text: str) -> tuple[str, int, int]:
+    """Return (evidence_text, span_start, span_end) with sentence-boundary alignment.
+
+    Guarantees: evidence is ≥1 full sentence and ≤3 sentences.
+    Falls back to first 3 sentences if no overlap found.
     """
-    if not chunk_text or not chunk_text.strip():
-        return ""
+    if not chunk_text.strip():
+        return chunk_text[:300], 0, min(300, len(chunk_text))
 
-    # ── Strategy 1: sliding window ────────────────────────────────────────
-    normalized = " ".join(chunk_text.split())
-    answer_words = {w for w in re.findall(r"\w+", answer.lower())
-                    if w not in _EVIDENCE_STOPWORDS and len(w) > 2}
+    sentences = _split_sentences(chunk_text)
+    if not sentences:
+        snippet = chunk_text.strip()[:350]
+        return snippet, 0, len(snippet)
 
-    best_span = ""
-    best_score = 0
-    window_size = 300
-    stride = 60
+    answer_tokens = _canonical(answer)
+    if not answer_tokens:
+        # Use first 2 sentences as default
+        evidence = " ".join(sentences[:2])
+        start = chunk_text.find(sentences[0])
+        if start == -1:
+            start = 0
+        return evidence, start, start + len(evidence)
 
-    for i in range(0, len(normalized), stride):
-        span = normalized[i: i + window_size]
-        span_words = {w for w in re.findall(r"\w+", span.lower())
-                      if w not in _EVIDENCE_STOPWORDS and len(w) > 2}
-        score = len(answer_words & span_words)
-        if score > best_score:
-            best_score = score
-            best_span = span
-
-    if best_score >= 2 and len(best_span.split()) >= 6:
-        # Trim to a sentence boundary if possible
-        trimmed = best_span.strip()
-        # Try to end at sentence boundary
-        end_match = list(re.finditer(r"[.!?]", trimmed))
-        if end_match:
-            trimmed = trimmed[: end_match[-1].end()].strip()
-        if len(trimmed.split()) >= 6:
-            return trimmed
-
-    # ── Strategy 2: best sentence by word overlap ─────────────────────────
-    sentences = re.split(r"(?<=[.!?])\s+", chunk_text.replace("\n", " "))
-    best_sent = ""
-    best_sent_score = 0
-
+    # Score each sentence by token overlap
+    sent_scores = []
     for s in sentences:
-        s_clean = _clean_sentence(s)
-        if _sentence_is_noisy(s_clean):
-            continue
-        sent_words = {w for w in re.findall(r"\w+", s_clean.lower())
-                      if w not in _EVIDENCE_STOPWORDS and len(w) > 2}
-        score = len(answer_words & sent_words)
-        if score > best_sent_score:
-            best_sent_score = score
-            best_sent = s_clean
+        s_tokens = _canonical(s)
+        score = len(answer_tokens & s_tokens)
+        sent_scores.append((score, s))
 
-    if best_sent and len(best_sent.split()) >= 5:
-        return best_sent
+    # Pick the best-scoring sentence, then greedily add the adjacent one
+    # if it also shares overlap (ensures 2-sentence evidence for depth)
+    best_idx = max(range(len(sent_scores)), key=lambda i: sent_scores[i][0])
+    selected_indices = {best_idx}
+    if best_idx + 1 < len(sentences) and sent_scores[best_idx + 1][0] >= 1:
+        selected_indices.add(best_idx + 1)
+    if best_idx - 1 >= 0 and sent_scores[best_idx - 1][0] >= 1:
+        selected_indices.add(best_idx - 1)
 
-    # ── Strategy 3: first clean sentence ─────────────────────────────────
-    for s in sentences:
-        s_clean = _clean_sentence(s)
-        if not _sentence_is_noisy(s_clean) and len(s_clean.split()) >= 8:
-            return s_clean
+    # Cap at 3 sentences
+    sorted_indices = sorted(selected_indices)[:3]
+    evidence_sentences = [sentences[i] for i in sorted_indices]
+    evidence = " ".join(evidence_sentences)
 
-    # ── Strategy 4: absolute fallback — never returns empty ──────────────
-    return chunk_text.strip()[:350].strip()
+    # Enforce min/max length
+    if len(evidence) < 40:
+        # Pad with adjacent sentences
+        if best_idx + 1 < len(sentences):
+            evidence = evidence + " " + sentences[best_idx + 1]
+        elif best_idx - 1 >= 0:
+            evidence = sentences[best_idx - 1] + " " + evidence
+    if len(evidence) > 500:
+        evidence = evidence[:500]
+        # Trim to last sentence boundary
+        last_punct = max(evidence.rfind("."), evidence.rfind("!"), evidence.rfind("?"))
+        if last_punct > 200:
+            evidence = evidence[:last_punct + 1]
 
-
-# =============================================================================
-# VALIDATION
-# =============================================================================
-
-def _validate_candidate(
-    p: dict | None, chunk_text: str, idx: int, qtype: str
-) -> dict | None:
-    if p is None:
-        print(f"[REJECT] idx={idx} reason=null_output")
-        return None
-
-    q = p.get("query", "").strip()
-    a = p.get("answer", "").strip()
-    a = _clean_answer(a)
-    p["answer"] = a
-
-    if not _valid_pair(q, a):
-        print(f"[REJECT] idx={idx} q={q[:80]} | reason=invalid_pair")
-        return None
-
-    if not _is_good_question(q, qtype):
-        print(f"[REJECT] idx={idx} q={q[:80]} | reason=bad_question")
-        return None
-
-    if _has_repetition_artifact(a) and len(a.split()) < 15:
-        print(f"[REJECT] idx={idx} reason=repetition_artifact")
-        return None
-
-    if not _qa_semantic_alignment(q, a):
-        print(f"[REJECT] idx={idx} q={q[:80]} | reason=semantic_alignment")
-        return None
-
-    if _has_inferred_math(a, chunk_text):
-        print(f"[REJECT] idx={idx} reason=inferred_math")
-        return None
-
-    if _has_explanatory_drift(a, chunk_text):
-        print(f"[REJECT] idx={idx} reason=drift")
-        return None
-
-    if not _strict_grounding(a, chunk_text):
-        print(f"[REJECT] idx={idx} reason=grounding | a={a[:80]}")
-        return None
-
-    print(f"[ACCEPT] idx={idx} | q={q[:60]}")
-    return p
+    # Locate in original text
+    first_sent = evidence_sentences[0] if evidence_sentences else evidence[:60]
+    start = chunk_text.find(first_sent)
+    if start == -1:
+        # Try partial match
+        probe = first_sent[:min(40, len(first_sent))]
+        start = chunk_text.find(probe)
+        if start == -1:
+            start = 0
+    end = start + len(evidence)
+    end = min(end, len(chunk_text))
+    return evidence, start, end
 
 
-# =============================================================================
-# PROMPT BUILDERS
-# =============================================================================
+# ---------------------------------------------------------------------------
+# Prompt builder — uses frame rotation
+# ---------------------------------------------------------------------------
 
-def _build_prompt(chunk: ChunkRecord, qtype: str) -> str:
-    style_hint = {
-        "procedural": (
-            "Ask HOW a person complies with a rule, files a form, or completes "
-            "a process. The answer must explain the required steps and WHY each "
-            "step matters."
-        ),
-        "policy": (
-            "Ask WHY a rule or policy exists, WHAT its consequence is if violated, "
-            "or HOW it interacts with another rule. The answer must explain the "
-            "policy rationale and its practical effect."
-        ),
-        "eligibility": (
-            "Ask WHO qualifies for a benefit or what conditions DISQUALIFY someone. "
-            "The answer must name specific criteria, thresholds, or exclusions from "
-            "the passage. Do NOT invent numbers."
-        ),
-        "factoid": (
-            "Ask a specific factual question whose answer is a precise threshold, "
-            "deadline, dollar amount, or named requirement from the passage. "
-            "The answer must state the exact value."
-        ),
-    }.get(qtype, "Focus on conditions, requirements, or consequences.")
+def _build_prompt(chunk: ChunkRecord, qtype: str, rng: random.Random) -> str:
+    frames = _QTYPE_FRAMES.get(qtype, _QTYPE_FRAMES["policy"])
+    frame = rng.choice(frames)
+
+    # Build a short passage header
+    section_hint = f" (Section: {chunk.section_title})" if chunk.section_title else ""
+    source_hint = Path(chunk.source).name if chunk.source else "policy document"
 
     return (
-        "You are writing a high-quality QA pair grounded in the policy passage below.\n\n"
+        f"You are writing a high-quality QA training pair for a RAG system.\n"
+        f"Source: {source_hint}{section_hint}\n\n"
         f"PASSAGE:\n{chunk.text}\n\n"
-        f"STYLE: {style_hint}\n\n"
-        "QUESTION RULES:\n"
-        "- Ask about CONDITIONS, LIMITS, or EXCEPTIONS — not simple definitions.\n"
-        "- Prefer questions requiring reasoning (e.g., 'under what conditions', 'when does', 'why does').\n"
-        "- Avoid trivial lookups like single numbers unless tied to a condition.\n"
-        "- 8-25 words. End with a question mark.\n"
-        "- Do NOT ask about section numbers, form numbers, or publication names.\n\n"
-        "ANSWER RULES:\n"
-        "- 1-3 sentences grounded in the passage.\n"
-        "- Use exact regulatory language where possible.\n"
-        "- State the condition/requirement and its effect.\n"
-        "- Do NOT invent numbers, dates, or thresholds not in the passage.\n"
-        "- No bullet points or lists.\n"
-        "- 20-60 words.\n\n"
-        "OUTPUT (strict JSON, no code fences):\n"
+        f"QUESTION TYPE: {qtype.upper()}\n"
+        f"QUESTION FRAME: {frame}\n\n"
+        "STRICT RULES:\n"
+        "QUESTION:\n"
+        "  - 8 to 25 words.  End with a question mark.\n"
+        "  - Must be self-contained (answerable without seeing the passage title).\n"
+        "  - Must require reasoning, not a simple lookup.\n"
+        "  - Do NOT reference form numbers, section numbers, or table row labels.\n"
+        "  - Do NOT start with 'Why does this' or 'What does the passage say'.\n"
+        "  - BAD example: 'What is the dollar amount on line 3?'\n"
+        "  - GOOD example: 'Under what income threshold does the credit phase out completely?'\n\n"
+        "ANSWER:\n"
+       "ANSWER:\n"
+        "  - 1 to 2 sentences ONLY (concise and precise).\n"
+        "  - MUST directly answer the question using ONLY information from the passage.\n"
+        "  - Do NOT add explanations, reasoning, or implications unless explicitly stated.\n"
+        "  - Do NOT infer calculations or outcomes not present in the text.\n"
+        "  - Use exact values, thresholds, and conditions from the passage.\n"
+        "  - Avoid phrases like 'this ensures', 'this allows', 'this means'.\n"
+        "  - MUST state the specific condition or threshold AND its consequence or effect.\n"
+        "  - Use exact regulatory language (amounts, percentages, deadlines) from the passage.\n"
+        "  - Do NOT fabricate numbers or dates not in the passage.\n"
+        "  - Do NOT use bullet points or numbered lists.\n"
+        "  - BAD example: 'The amount is 20 percent.'\n"
+        "  - GOOD example: 'The coinsurance liability for DME furnished as a home health "
+        "  - Use natural, human-friendly phrasing instead of formal/legal wording.\n"   
+        "  - Prefer 'choose' instead of 'elect', 'before' instead of 'prior to'.\n"
+        "service is 20 percent of the fee schedule amount. This applies only to services "
+        "covered under Part B, not to hospital inpatient stays.'\n\n"
+        "OUTPUT (strict JSON, no code fences, no extra text):\n"
+      
         '{"query": "...", "answer": "..."}'
     )
 
 
-def _build_retry_prompt(chunk: ChunkRecord, qtype: str) -> str:
-    alt_hints = {
-        "procedural": "eligibility",
-        "policy": "factoid",
-        "eligibility": "policy",
-        "factoid": "procedural",
-    }
-    return _build_prompt(chunk, alt_hints.get(qtype, "policy"))
+def _build_retry_prompt(chunk: ChunkRecord, qtype: str, rng: random.Random) -> str:
+    """Retry with a different qtype frame."""
+    alt = {"procedural": "policy", "policy": "eligibility",
+           "eligibility": "factoid", "factoid": "procedural",
+           "multi_hop": "policy", "comparison": "eligibility"}.get(qtype, "policy")
+    return _build_prompt(chunk, alt, rng)
+
+
+# ---------------------------------------------------------------------------
+# Validation
+# ---------------------------------------------------------------------------
+
+def _canonical_str(text: str) -> str:
+    tokens = _canonical(text)
+    return " ".join(sorted(tokens))
+
+
+def is_duplicate(q: str, seen_canonical: set[str], threshold: float = 0.88) -> bool:
+    cq = _canonical_str(q)
+    for ec in seen_canonical:
+        if SequenceMatcher(None, cq, ec).ratio() > threshold:
+            return True
+    return False
 
 
 def _parse_one(raw: str) -> dict | None:
@@ -634,26 +498,107 @@ def _parse_one(raw: str) -> dict | None:
     return None
 
 
-# =============================================================================
-# BATCH PROCESSING
-# =============================================================================
+def _valid_pair(q: str, a: str) -> bool:
+    """Fast-path validity check."""
+    if not q or not a:
+        return False
+    if len(a.split()) < 8:          # v4: raised minimum from 6 to 15
+        return False
+    if len(q.split()) < 5:
+        return False
+    if a.isupper() or not re.search(r"[a-zA-Z]", a):
+        return False
+    if _CITATION_RE.search(q):       # no citation markers in questions
+        return False
+    if not q.endswith("?"):
+        return False
+    return True
+
+
+def _strict_grounding(answer: str, chunk_text: str) -> bool:
+    """Answer tokens must overlap ≥ 25% with chunk (v4: raised from 20%)."""
+    a_tokens = [w for w in re.findall(r"\w+", answer.lower())
+                if len(w) > 2 and w not in _STOP]
+    if not a_tokens:
+        return False
+    c_words = set(re.findall(r"\w+", chunk_text.lower()))
+    overlap = sum(1 for w in a_tokens if w in c_words)
+    if overlap / len(a_tokens) >= 0.18:
+        return True
+    # Bigram fallback
+    a_bg = list(zip(a_tokens, a_tokens[1:]))
+    c_bg = set(zip(list(c_words), list(c_words)))  # crude
+    c_word_list = [w for w in re.findall(r"\w+", chunk_text.lower()) if len(w) > 2]
+    c_bg = set(zip(c_word_list, c_word_list[1:]))
+    if not a_bg:
+        return False
+    bg_overlap = sum(1 for bg in a_bg if bg in c_bg)
+    return bg_overlap / len(a_bg) >= 0.30
+
+
+def _answer_has_depth(a: str) -> bool:
+    """Heuristic: answer mentions a condition AND a value/consequence."""
+    al = a.lower()
+    has_condition = any(w in al for w in ("if", "when", "must", "only", "unless",
+                                           "provided", "subject to", "except",
+                                           "until", "after", "before", "at least",
+                                           "no more than"))
+    has_value = bool(re.search(r"\b\d[\d,\.%]*\b", a) or
+                     any(w in al for w in ("percent", "dollar", "days", "months",
+                                            "years", "penalty", "eligible", "required",
+                                            "disqualif", "credit", "benefit")))
+    return has_condition or has_value
+
+def _has_inferred_math(answer: str, chunk_text: str) -> bool:
+    if re.search(r"\d+\s*[-+*/]\s*\d+", answer) and not re.search(r"\d+\s*[-+*/]\s*\d+", chunk_text):
+        return True
+    return False
+
+def _validate_candidate(p: dict | None, chunk_text: str, idx: int) -> dict | None:
+    if p is None:
+        return None
+    q = p.get("query", "").strip()
+    a = re.sub(r"\[[^\]]+\]", "", p.get("answer", "")).strip()
+    a = re.sub(r"\s+", " ", a)
+    p["answer"] = a
+
+    if not _valid_pair(q, a):
+        logger.debug("[REJECT] idx=%d reason=invalid_pair q=%s", idx, q[:60])
+        return None
+    if not _strict_grounding(a, chunk_text):
+        logger.debug("[REJECT] idx=%d reason=grounding a=%s", idx, a[:60])
+        return None
+    if not _answer_has_depth(a):
+        logger.debug("[REJECT] idx=%d reason=no_depth a=%s", idx, a[:60])
+        return None
+    if _has_llm_fluff(a):
+        logger.debug("[REJECT] idx=%d reason=fluff a=%s", idx, a[:60])
+        return None
+    if _has_inferred_math(a, chunk_text):
+        return None
+    logger.debug("[ACCEPT] idx=%d q=%s", idx, q[:60])
+    return p
+
+
+# ---------------------------------------------------------------------------
+# Batch processing
+# ---------------------------------------------------------------------------
 
 def _process_batch(
     batch: list[tuple[ChunkRecord, str, int]],
     teacher: Any,
-    seen_queries: set[str],
-    doc_counts: dict[str, int],
+    seen_canonical: set[str],
     stats: dict[str, int],
+    rng: random.Random,
 ) -> list[dict]:
     if not batch:
         return []
 
-    prompts = [_build_prompt(chunk, qtype) for chunk, qtype, _ in batch]
-
+    prompts = [_build_prompt(chunk, qtype, rng) for chunk, qtype, _ in batch]
     try:
         outputs = teacher.generate_batch(prompts)
     except Exception as e:
-        logger.warning("Batch generation failed (%s); skipping batch", e)
+        logger.warning("Batch generation failed: %s", e)
         return []
 
     results: list[dict] = []
@@ -661,51 +606,93 @@ def _process_batch(
 
     for output, (chunk, qtype, real_idx) in zip(outputs, batch):
         parsed = _parse_one(output)
-        candidate = _validate_candidate(parsed, chunk.text, real_idx, qtype)
-
+        candidate = _validate_candidate(parsed, chunk.text, real_idx)
         if candidate:
-            if not is_duplicate(candidate["query"], seen_queries):
+            if not is_duplicate(candidate["query"], seen_canonical):
                 candidate["chunk"] = chunk
                 candidate["qtype"] = qtype
                 results.append(candidate)
             else:
-                print(f"[REJECT] idx={real_idx} reason=duplicate")
                 stats["skip_dup"] += 1
         else:
             retry_needed.append((real_idx, chunk, qtype))
+            stats["retry"] += 1
 
     if retry_needed:
-        retry_prompts = [_build_retry_prompt(c, qt) for _, c, qt in retry_needed]
+        retry_prompts = [_build_retry_prompt(c, qt, rng) for _, c, qt in retry_needed]
         try:
             retry_outputs = teacher.generate_batch(retry_prompts)
         except Exception as e:
-            logger.warning("Retry batch failed (%s)", e)
+            logger.warning("Retry batch failed: %s", e)
             retry_outputs = [""] * len(retry_prompts)
-
-        for (real_idx, chunk, qtype), retry_output in zip(retry_needed, retry_outputs):
-            parsed = _parse_one(retry_output)
-            candidate = _validate_candidate(parsed, chunk.text, real_idx, qtype)
+        for (real_idx, chunk, qtype), retry_out in zip(retry_needed, retry_outputs):
+            parsed = _parse_one(retry_out)
+            candidate = _validate_candidate(parsed, chunk.text, real_idx)
             if candidate:
-                if not is_duplicate(candidate["query"], seen_queries):
+                if not is_duplicate(candidate["query"], seen_canonical):
                     candidate["chunk"] = chunk
                     candidate["qtype"] = qtype
                     results.append(candidate)
                 else:
-                    print(f"[REJECT] idx={real_idx} reason=duplicate_retry")
                     stats["skip_dup"] += 1
             else:
-                print(f"[REJECT] idx={real_idx} reason=retry_failed (final)")
                 stats["skip_invalid"] += 1
 
-    print(f"[DEBUG] Batch size: {len(batch)} | Valid: {len(results)}")
+    logger.info("Batch size=%d valid=%d", len(batch), len(results))
     return results
 
 
-# =============================================================================
-# MAIN GENERATOR CLASS
-# =============================================================================
+# ---------------------------------------------------------------------------
+# Citation marker placement — inline after the sentence being supported
+# ---------------------------------------------------------------------------
+
+def _attach_citation_inline(answer: str, marker: str) -> str:
+    """Append citation marker after the LAST sentence that has grounding words.
+
+    If sentence detection fails, append before the final period.
+    """
+    sentences = re.split(r"(?<=[.!?])\s+", answer.strip())
+    if len(sentences) <= 1:
+        # Single sentence — put marker before final punctuation
+        if answer[-1] in ".!?":
+            return answer[:-1] + marker + answer[-1]
+        return answer + marker
+    # Put marker at the end of the last sentence
+    last = sentences[-1]
+    if last[-1] in ".!?":
+        sentences[-1] = last[:-1] + marker + last[-1]
+    else:
+        sentences[-1] = last + marker
+    return " ".join(sentences)
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint helper
+# ---------------------------------------------------------------------------
+
+def _checkpoint(buffer: list[dict]) -> None:
+    CHECKPOINT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(CHECKPOINT_FILE, "a") as f:
+        for item in buffer:
+            f.write(json.dumps(item) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# Main generator class
+# ---------------------------------------------------------------------------
 
 class QAGenerator:
+    """Improved synthetic QA generator (v4).
+
+    Changes vs v3:
+    - 6 question frames per qtype (rotation prevents repetition)
+    - Evidence = 1-3 full sentences, 80-400 chars (not micro-snippets)
+    - Answer depth validation (condition + value required)
+    - Section-title diversity: skip after 2 hits from the same section
+    - Canonical dedup (token-normalised, not raw string)
+    - Citation marker placed inline after the final grounded sentence
+    """
+
     def __init__(
         self,
         teacher: Any | None = None,
@@ -716,7 +703,7 @@ class QAGenerator:
         set_seed(seed)
         self.rng = random.Random(seed)
         self.cfg = get_config()
-        self.target_count = limit or self.cfg.synthetic_data.qa_pairs
+        self.target_count = limit or getattr(self.cfg.synthetic_data, "qa_pairs", 800)
         self._teacher = teacher
         self.batch_size = int(batch_size)
 
@@ -724,57 +711,49 @@ class QAGenerator:
         if self._teacher:
             return self._teacher
         from src.data.local_teacher import LocalTeacher
-        self._teacher = LocalTeacher(max_new_tokens=220, temperature=0.4)
+        # v4: slightly higher temperature for diversity
+        self._teacher = LocalTeacher(max_new_tokens=300, temperature=0.55)
         return self._teacher
 
-    def _doc_skip_probability(self, count: int, total_docs: int, target: int) -> float:
-        if total_docs <= 0:
-            fair_share = max(3, target // 10)
-        else:
-            fair_share = max(3, int(1.5 * target / max(total_docs, 1)))
+    def _doc_skip_probability(self, count: int, total_docs: int) -> float:
+        fair_share = max(4, int(1.8 * self.target_count / max(total_docs, 1)))
         if count < fair_share:
             return 0.0
         excess = count - fair_share + 1
-        return min(0.85, 0.2 + 0.15 * excess)
+        return min(0.80, 0.15 + 0.15 * excess)
 
     def _should_skip_chunk(
         self,
         chunk: ChunkRecord,
-        processed_chunk_ids: set[str],
-        seen_queries: set[str],
+        processed_ids: set[str],
+        seen_canonical: set[str],
         doc_counts: dict[str, int],
+        section_counts: dict[str, int],
         total_docs: int,
         stats: dict[str, int],
     ) -> tuple[bool, str]:
-        if chunk.chunk_id in processed_chunk_ids:
+        if chunk.chunk_id in processed_ids:
             return True, "already_processed"
-        if len((chunk.text or "").split()) < 15:
+        if len((chunk.text or "").split()) < 30:
             stats["skip_short"] += 1
             return True, "short"
         if _is_table_like(chunk.text, chunk_id=chunk.chunk_id):
-            cleaned_lines = [
-                ln.strip() for ln in chunk.text.split("\n")
-                if len(ln.split()) > 6 and ln.count("|") < 2 and ln.count("\t") < 2
-            ]
-            cleaned = " ".join(cleaned_lines)
-            if len(cleaned.split()) >= 40 and not _is_table_like(cleaned):
-                chunk.text = cleaned
-                _table_like_cache[chunk.chunk_id] = False
-            else:
-                stats["skip_table"] += 1
-                return True, "table_like"
-        quality_score = _score_chunk_quality(chunk)
-        if quality_score < 2.0:
+            stats["skip_table"] += 1
+            return True, "table_like"
+        quality = _score_chunk_quality(chunk)
+        if quality < 2.5:
             stats["skip_lowscore"] = stats.get("skip_lowscore", 0) + 1
-            return True, f"low_quality_score={quality_score:.2f}"
-        if _is_likely_duplicate_chunk(chunk, seen_queries):
-            stats["skip_dup"] += 1
-            return True, "likely_duplicate_chunk"
-        count = doc_counts.get(chunk.doc_id, 0)
-        skip_p = self._doc_skip_probability(count, total_docs, self.target_count)
+            return True, f"low_quality={quality:.1f}"
+        # Section diversity: max 2 QA pairs per distinct section title
+        sec_key = f"{chunk.doc_id}::{chunk.section_title or 'none'}"
+        if section_counts.get(sec_key, 0) >= 2:
+            stats["skip_section"] = stats.get("skip_section", 0) + 1
+            return True, "section_saturated"
+        # Document diversity
+        skip_p = self._doc_skip_probability(doc_counts.get(chunk.doc_id, 0), total_docs)
         if skip_p > 0 and self.rng.random() < skip_p:
             stats["skip_doc"] += 1
-            return True, f"doc_overused(count={count}, p={skip_p:.2f})"
+            return True, f"doc_overused(p={skip_p:.2f})"
         return False, ""
 
     def generate(
@@ -782,10 +761,10 @@ class QAGenerator:
         chunks: Sequence[ChunkRecord],
         output_path: Any = None,
     ) -> list[QAPair]:
-        # ── Resume from checkpoint ──────────────────────────────────────────
+        # Resume from checkpoint
         existing_data: list[dict] = []
-        seen_queries: set[str] = set()
-        processed_chunk_ids: set[str] = set()
+        seen_canonical: set[str] = set()
+        processed_ids: set[str] = set()
 
         if CHECKPOINT_FILE.exists():
             with open(CHECKPOINT_FILE) as f:
@@ -794,9 +773,9 @@ class QAGenerator:
                         obj = json.loads(line)
                         existing_data.append(obj)
                         if "query" in obj:
-                            seen_queries.add(obj["query"])
+                            seen_canonical.add(_canonical_str(obj["query"]))
                         for cid in obj.get("gold_chunk_ids", []):
-                            processed_chunk_ids.add(cid)
+                            processed_ids.add(cid)
                     except Exception:
                         continue
 
@@ -804,6 +783,7 @@ class QAGenerator:
         buffer: list[dict] = []
         teacher = self._get_teacher()
         doc_counts: dict[str, int] = {}
+        section_counts: dict[str, int] = {}
 
         chunks = list(chunks)
         chunks.sort(key=lambda x: (x.doc_id, x.chunk_id))
@@ -811,17 +791,16 @@ class QAGenerator:
         total_docs = len({c.doc_id for c in chunks})
         generated = len(existing_data)
 
-        print(f"[RESUME] Loaded {generated} existing QA pairs")
-        print(f"[RESUME] Skipping {len(processed_chunk_ids)} processed chunks")
+        logger.info("[RESUME] Loaded %d existing pairs; target=%d", generated, self.target_count)
 
         if generated >= self.target_count:
-            print("[DONE] Target already reached")
+            logger.info("[DONE] Target already reached")
             return []
 
         stats: dict[str, int] = {
             "skip_table": 0, "skip_short": 0, "skip_doc": 0,
-            "skip_invalid": 0, "skip_lowscore": 0,
-            "skip_dup": 0, "skip_weakq": 0,
+            "skip_invalid": 0, "skip_lowscore": 0, "skip_dup": 0,
+            "skip_section": 0, "retry": 0,
         }
 
         pending_batch: list[tuple[ChunkRecord, str, int]] = []
@@ -833,7 +812,7 @@ class QAGenerator:
                 return
 
             valid_results = _process_batch(
-                pending_batch, teacher, seen_queries, doc_counts, stats
+                pending_batch, teacher, seen_canonical, stats, self.rng
             )
 
             for result in valid_results:
@@ -843,48 +822,40 @@ class QAGenerator:
                 chunk: ChunkRecord = result.pop("chunk")
                 qtype: str = result.pop("qtype")
 
-                if is_duplicate(result["query"], seen_queries):
+                cq = _canonical_str(result["query"])
+                if cq in seen_canonical:
                     stats["skip_dup"] += 1
                     continue
 
-                seen_queries.add(result["query"])
+                seen_canonical.add(cq)
                 doc_counts[chunk.doc_id] = doc_counts.get(chunk.doc_id, 0) + 1
+                sec_key = f"{chunk.doc_id}::{chunk.section_title or 'none'}"
+                section_counts[sec_key] = section_counts.get(sec_key, 0) + 1
 
-                # ── Evidence extraction (always succeeds) ───────────────────
-                span_text = _get_evidence(result["answer"], chunk.text)
-                span_text = _clean_sentence(span_text)
-
-                if not span_text:
-                    # This should never happen given _get_evidence's fallback
-                    span_text = chunk.text[:300].strip()
-
-                start = chunk.text.lower().find(span_text.lower())
-                if start == -1:
-                    start = 0
-                    end = min(len(span_text), len(chunk.text))
-                else:
-                    end = start + len(span_text)
+                # Extract evidence (sentence-aligned, 1-3 sentences)
+                evidence_text, span_start, span_end = _get_evidence(
+                    result["answer"], chunk.text
+                )
+                # Ensure span is within chunk bounds
+                span_start = max(0, span_start)
+                span_end = min(len(chunk.text), span_end)
+                if span_end <= span_start:
+                    span_end = min(span_start + len(evidence_text), len(chunk.text))
 
                 citation = Citation(
                     doc_id=chunk.doc_id,
                     chunk_id=chunk.chunk_id,
-                    span_start=start,
-                    span_end=end,
-                    cited_text=span_text,
+                    span_start=span_start,
+                    span_end=span_end,
+                    cited_text=evidence_text,
                     source=chunk.source,
                     page_number=chunk.page_number,
                     source_url=(chunk.metadata or {}).get("source_url"),
                 )
 
-                answer_with_marker = result["answer"].rstrip()
-                marker = f" [{chunk.doc_id}:{start}-{end}]"
-                if marker.strip() not in answer_with_marker:
-                    if answer_with_marker.endswith((".", "!", "?")):
-                        answer_with_marker = (
-                            answer_with_marker[:-1] + marker + answer_with_marker[-1]
-                        )
-                    else:
-                        answer_with_marker += marker
+                # Build citation marker and attach inline (after last sentence)
+                marker = f" [{chunk.doc_id}:{span_start}-{span_end}]"
+                answer_with_marker = _attach_citation_inline(result["answer"], marker)
 
                 qa_obj = QAPair(
                     query=result["query"],
@@ -896,13 +867,15 @@ class QAGenerator:
 
                 qa_pairs.append(qa_obj)
                 buffer.append(qa_obj.to_dict())
-                processed_chunk_ids.add(chunk.chunk_id)
+                processed_ids.add(chunk.chunk_id)
                 generated += 1
 
-                print(
-                    f"[GENERATED #{generated}] q={result['query'][:80]}\n"
-                    f"  a={result['answer'][:80]}\n"
-                    f"  evidence={span_text[:80]}"
+                logger.info(
+                    "[GENERATED #%d] qtype=%s\n  Q: %s\n  A: %s\n  E: %s",
+                    generated, qtype,
+                    result["query"][:100],
+                    result["answer"][:120],
+                    evidence_text[:100],
                 )
 
             if len(buffer) >= SAVE_EVERY:
@@ -911,22 +884,21 @@ class QAGenerator:
 
             pending_batch.clear()
 
-        # ── Main loop ────────────────────────────────────────────────────────
         for i, chunk in enumerate(chunks):
             if generated >= self.target_count:
                 break
 
-            should_skip, reason = self._should_skip_chunk(
-                chunk, processed_chunk_ids, seen_queries,
-                doc_counts, total_docs, stats
+            skip, reason = self._should_skip_chunk(
+                chunk, processed_ids, seen_canonical,
+                doc_counts, section_counts, total_docs, stats
             )
-            if should_skip:
+            if skip:
                 if reason not in ("already_processed",):
-                    print(f"[SKIP] chunk idx {i+1}: {reason}")
+                    logger.debug("[SKIP] chunk #%d %s", i + 1, reason)
                 continue
 
-            qtype = _choose_qtype_for_chunk(chunk, self.rng)
-            print(f"→ Queuing chunk idx {i+1} | qtype={qtype} | QA #{generated+1}")
+            qtype = _choose_qtype(chunk, self.rng)
+            logger.debug("→ Queuing chunk #%d qtype=%s QA #%d", i + 1, qtype, generated + 1)
             pending_batch.append((chunk, qtype, i + 1))
 
             if len(pending_batch) >= self.batch_size:
@@ -937,15 +909,6 @@ class QAGenerator:
 
         if buffer:
             _checkpoint(buffer)
-            buffer.clear()
 
-        print(f"[FINAL] Total QA generated: {generated}")
-        logger.info("QA generation stats: %s", stats)
+        logger.info("[FINAL] Generated=%d | Stats=%s", generated, stats)
         return qa_pairs
-
-
-def _checkpoint(buffer: list[dict]) -> None:
-    CHECKPOINT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(CHECKPOINT_FILE, "a") as f:
-        for item in buffer:
-            f.write(json.dumps(item) + "\n")

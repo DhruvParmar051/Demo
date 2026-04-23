@@ -137,7 +137,7 @@ def _run_preference(out_dir: Path) -> dict[str, Any]:
     if not qa:
         return {"status": "skipped", "reason": "no_qa_pairs", "count": 0}
     out_path = out_dir / "preferences.jsonl"
-    triplets = PreferenceGenerator().generate(qa_pairs=qa, output_path=out_path)
+    triplets = PreferenceGenerator(limit=3000).generate(qa_pairs=qa, output_path=out_path)
     return {"status": "ok", "count": len(triplets), "output": str(out_path)}
 
 
