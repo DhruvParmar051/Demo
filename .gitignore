@@ -15,13 +15,16 @@ eggs/
 *.whl
 pip-log.txt
 pip-delete-this-directory.txt
-
+*.db-shm
+*.db-wal
+*.sqlite3
 # --- Virtual Environments ---
 venv/
 .venv/
 env/
 ENV/
 .conda/
+*.jsonl
 
 # --- Environment Variables ---
 .env

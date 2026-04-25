@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 import torch
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
 
 from src.data.schema import ChunkRecord
 from src.utils.config import get_config
@@ -46,11 +46,11 @@ class ColBERTReranker:
 
     def __init__(
         self,
-        model_name: str = "jinaai/jina-colbert-v2",
+        model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
         checkpoint_path: str | None = None,
         max_length: int | None = None,
         batch_size: int = 32,
-        inference_max_length: int = 512,  # NEW
+        inference_max_length: int = 512,
     ) -> None:
         cfg = get_config()
         self.model_name = model_name
@@ -77,15 +77,39 @@ class ColBERTReranker:
         # fine-tuned checkpoint ships with a modified tokenizer (added
         # special tokens, resized vocab), using the base HF tokenizer leads
         # to silent ID mismatches at inference.
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            load_path, trust_remote_code=True
-        )
-        self.model = AutoModelForSequenceClassification.from_pretrained(
-            load_path, trust_remote_code=True
-        )
+        pt_weights = Path(load_path) / "model.pt" if Path(load_path).is_dir() else None
+        has_state_dict = pt_weights is not None and pt_weights.exists()
+        has_hf_config = (Path(load_path) / "config.json").exists() if Path(load_path).is_dir() else False
+
+        if has_state_dict and not has_hf_config:
+            # Fine-tuned checkpoint saved as raw state dict — load base model
+            # first, then overlay the fine-tuned weights.
+            logger.info(
+                "Checkpoint %s has model.pt but no config.json; "
+                "loading base model '%s' then applying fine-tuned weights.",
+                load_path, model_name,
+            )
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
+            state = torch.load(str(pt_weights), map_location="cpu")
+            # Accept both raw state dict and {"model": state_dict} wrappers.
+            if isinstance(state, dict) and "model" in state and not any(
+                k.startswith("encoder.") for k in state
+            ):
+                state = state["model"]
+            missing, unexpected = self.model.load_state_dict(state, strict=False)
+            if missing:
+                logger.warning("Missing keys when loading fine-tuned weights: %s", missing[:5])
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                load_path, trust_remote_code=True
+            )
+            self.model = AutoModelForSequenceClassification.from_pretrained(
+                load_path, trust_remote_code=True
+            )
+
         self.model.to(self.device)
         self.model.eval()
-
         logger.info("Reranker ready (%s)", load_path)
 
     # ------------------------------------------------------------------

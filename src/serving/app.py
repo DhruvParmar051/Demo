@@ -40,6 +40,23 @@ from src.utils.device import get_device_string
 from src.serving.ingest_router import build_ingest_router
 from loguru import logger
 
+# Import at module level so Pydantic v2 can resolve forward references.
+try:
+    from fastapi import FastAPI, HTTPException, Query, Request  # type: ignore
+    from fastapi.middleware.cors import CORSMiddleware  # type: ignore
+    from fastapi.responses import JSONResponse, PlainTextResponse  # type: ignore
+    from pydantic import BaseModel, ConfigDict, Field  # type: ignore
+
+    class QueryRequest(BaseModel):
+        model_config = ConfigDict(protected_namespaces=())
+
+        query: str = Field(..., min_length=1, max_length=8192)
+        model_tag: str = Field("m5")
+
+except ImportError:
+    # fastapi not installed — create_app will raise a clear error at call time.
+    QueryRequest = None  # type: ignore
+
 
 # ----------------------------------------------------------------------
 # Pipeline registry (lazy)
@@ -85,15 +102,10 @@ class PipelineRegistry:
 
 def create_app(config: Any = None, model_tag: str | None = None) -> Any:
     """Build and return the FastAPI application."""
-    try:
-        from fastapi import FastAPI, HTTPException, Query, Request  # type: ignore
-        from fastapi.middleware.cors import CORSMiddleware  # type: ignore
-        from fastapi.responses import JSONResponse, PlainTextResponse  # type: ignore
-        from pydantic import BaseModel, Field  # type: ignore
-    except ImportError as exc:
+    if QueryRequest is None:
         raise RuntimeError(
             "fastapi and pydantic are required to run the server."
-        ) from exc
+        )
 
     try:
         from sse_starlette.sse import EventSourceResponse  # type: ignore
@@ -101,6 +113,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
         EventSourceResponse = None  # type: ignore
 
     cfg = config if config is not None else get_config()
+    api_prefix = getattr(cfg.serving, "api_prefix", "").rstrip("/")  # e.g. "/api/v1"
     app = FastAPI(title="AegisRAG", version="1.0.0")
 
     app.add_middleware(
@@ -116,20 +129,39 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
     audit = AuditLogger(audit_db)
     registry = PipelineRegistry(cfg)
 
-    default_tag = (model_tag or "m5").lower()
+    # Pre-build the default pipeline synchronously in the MAIN thread before
+    # uvicorn starts. llama-cpp-python (GGUF backend) segfaults when initialized
+    # from a thread-pool executor (asyncio.to_thread) on macOS.
+    # We also force _ensure_loaded() on the generator so the Llama object is
+    # created here in the main process — NOT lazily on the first request.
+    if model_tag:
+        _tag = model_tag.lower()
+        logger.info("Pre-loading pipeline '%s' in main thread ...", _tag)
+        try:
+            _pipeline = registry._build(_tag)
+            registry._cache[_tag] = _pipeline
+            # Force the generator backend (GGUF/HF) to fully initialize now.
+            _gen = getattr(_pipeline, "generator", None)
+            if _gen is not None and hasattr(_gen, "_ensure_loaded"):
+                logger.info("Loading generator backend in main thread ...")
+                _gen._ensure_loaded()
+                logger.info("Generator ready (backend=%s).", _gen.backend)
+            logger.info("Pipeline '%s' ready.", _tag)
+        except Exception as _exc:
+            logger.warning("Pipeline pre-load failed (%s); will retry on first request.", _exc)
 
     # FIX 10: Read heartbeat interval from config
     sse_heartbeat_interval: float = float(
         getattr(cfg.serving, "sse_heartbeat_interval", 15)
     )
 
-    class QueryRequest(BaseModel):
-        query: str = Field(..., min_length=1, max_length=8192)
-        model_tag: str = Field(default_tag)
+    # All API routes live on this router so they can be prefixed (e.g. /api/v1)
+    from fastapi import APIRouter as _APIRouter
+    router = _APIRouter(prefix=api_prefix)
 
     # ---------------- health ----------------------------------------------
 
-    @app.get("/health")
+    @router.get("/health")
     async def health() -> dict[str, Any]:
         return {
             "status": "ok",
@@ -139,7 +171,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
 
     # ---------------- /query ----------------------------------------------
 
-    @app.post("/query")
+    @router.post("/query")
     async def query(req: QueryRequest) -> dict[str, Any]:
         pipeline = await registry.get(req.model_tag)
         t_start = time.perf_counter()
@@ -157,7 +189,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
 
     # ---------------- /query/baseline --------------------------------------
 
-    @app.post("/query/baseline")
+    @router.post("/query/baseline")
     async def query_baseline(
         req: QueryRequest,
         baseline: str = Query("b1", pattern="^b[1-3]$"),
@@ -169,7 +201,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
 
     # ---------------- /query/stream ---------------------------------------
 
-    @app.post("/query/stream")
+    @router.post("/query/stream")
     async def query_stream(req: QueryRequest):
         if EventSourceResponse is None:
             raise HTTPException(
@@ -272,13 +304,13 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
 
     # ---------------- /tickets --------------------------------------------
 
-    @app.get("/tickets")
+    @router.get("/tickets")
     async def tickets() -> dict[str, Any]:
         return {"tickets": audit.list_tickets()}
 
     # ---------------- /metrics --------------------------------------------
 
-    @app.get("/metrics")
+    @router.get("/metrics")
     async def metrics() -> Any:
         s = audit.stats()
         lines = [
@@ -307,7 +339,8 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
     async def _shutdown() -> None:
         audit.close()
 
-    app.include_router(build_ingest_router(config))
+    app.include_router(router)
+    app.include_router(build_ingest_router(config), prefix=api_prefix)
 
     return app
 

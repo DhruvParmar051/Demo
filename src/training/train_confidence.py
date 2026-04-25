@@ -27,15 +27,37 @@ logger = logging.getLogger(__name__)
 _TOOL_NAMES = ("AnswerDirect", "SearchKB", "GetPolicy", "CreateTicket")
 
 
+class ConfigMapper(dict):
+    """
+    Helper class to allow dot-notation access (cfg.key.subkey) 
+    on standard Python dictionaries recursively.
+    """
+    def __getattr__(self, name):
+        try:
+            value = self[name]
+            if isinstance(value, dict):
+                return ConfigMapper(value)
+            return value
+        except KeyError:
+            raise AttributeError(f"Config object has no attribute '{name}'")
+
+
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    """Helper to load JSONL records from a path."""
     if not path.exists():
+        logger.warning(f"File not found: {path}")
         return []
     with path.open("r", encoding="utf-8") as f:
         return [json.loads(l) for l in f if l.strip()]
 
 
 def train(cfg: Any = None) -> dict[str, Any]:
-    cfg = cfg if cfg is not None else get_config()
+    """
+    Main training routine for the Confidence and Tool Routing heads.
+    """
+    # 1. Initialize configuration and wrap for dot-access
+    raw_cfg = cfg if cfg is not None else get_config()
+    cfg = ConfigMapper(raw_cfg) if isinstance(raw_cfg, dict) else raw_cfg
     set_seed(42)
 
     try:
@@ -52,13 +74,21 @@ def train(cfg: Any = None) -> dict[str, Any]:
     from src.evaluation.calibration import compute_ece
     from src.retrieval.vector_store import ChromaVectorStore
 
-    labels = _load_jsonl(Path(cfg.data.synthetic.confidence_labels_path))
-    tool_labels = _load_jsonl(
-        Path(cfg.data.synthetic.tool_route_labels_path)
-    ) if hasattr(cfg.data.synthetic, "tool_route_labels_path") else []
+    # 2. Path resolution: Match base.yaml data structure
+    # Fallback to local 'data' if synthetic_dir is missing in cfg
+    synth_dir = getattr(cfg.data, 'synthetic_dir', 'data')
+    synth_base = Path(synth_dir)
+    conf_path = synth_base / "confidence_labels.jsonl"
+    tool_path = synth_base / "tool_route_labels.jsonl"
+
+    labels = _load_jsonl(conf_path)
+    tool_labels = _load_jsonl(tool_path)
+    
     if not labels:
+        logger.error(f"Required confidence labels not found at {conf_path}")
         return {"status": "skipped", "reason": "no_labels"}
 
+    # Map queries to their gold tools
     tool_lookup = {t.get("query"): t.get("gold_tool", "AnswerDirect")
                    for t in tool_labels}
 
@@ -78,7 +108,8 @@ def train(cfg: Any = None) -> dict[str, Any]:
     def collate(batch: list[dict[str, Any]]) -> dict[str, Any]:
         queries = [b["query"] for b in batch]
         soft = torch.tensor([float(b["soft_label"]) for b in batch], dtype=torch.float32)
-        # Gold tool indices (defaults to AnswerDirect).
+        
+        # Gold tool indices.
         tools = torch.tensor(
             [
                 _TOOL_NAMES.index(tool_lookup.get(b["query"], "AnswerDirect"))
@@ -88,60 +119,74 @@ def train(cfg: Any = None) -> dict[str, Any]:
             ],
             dtype=torch.long,
         )
+        
         q_emb = torch.tensor(
             encoder.encode(queries, normalize_embeddings=True),
             dtype=torch.float32,
         )
-        # Evidence embeddings: simple zero-fill when we don't have cached text.
+        
         dim = q_emb.size(-1)
-        e_emb = torch.zeros(len(batch), 5, dim, dtype=torch.float32)
+        e_emb = torch.zeros(len(batch), dim, dtype=torch.float32)
+        
         return {"q_emb": q_emb, "e_emb": e_emb, "soft": soft, "tool": tools}
 
+    # 3. Data split and Hyperparameters
     random_split = int(0.9 * len(labels))
     train_recs, val_recs = labels[:random_split], labels[random_split:]
 
-    bs = int(cfg.training.confidence.batch_size)
-    lr = float(cfg.training.confidence.learning_rate)
-    epochs = int(cfg.training.confidence.epochs)
+    train_params = cfg.training.confidence_head
+    bs = int(train_params.batch_size)
+    lr = float(train_params.learning_rate)
+    epochs = int(train_params.num_epochs)
 
     train_loader = DataLoader(_Dataset(train_recs), batch_size=bs,
                               shuffle=True, collate_fn=collate)
     val_loader = DataLoader(_Dataset(val_recs), batch_size=bs,
                             shuffle=False, collate_fn=collate)
 
+    # 4. Model Setup
     head = ConfidenceHead(embedding_dim=encoder.get_sentence_embedding_dimension())
-    optim = torch.optim.Adam(head.parameters(), lr=lr)
+    optim = torch.optim.Adam(head.parameters(), lr=lr, weight_decay=float(train_params.weight_decay))
 
+    # 5. Training Loop
     for epoch in range(epochs):
         head.train()
-        tot = 0.0
-        n = 0
+        tot, n = 0.0, 0
         for batch in train_loader:
             out = head(batch["q_emb"], batch["e_emb"])
             conf = out["confidence"].squeeze(-1)
             tool_logits = out["tool_logits"]
+            
             loss_conf = F.mse_loss(conf, batch["soft"])
             loss_tool = F.cross_entropy(tool_logits, batch["tool"])
             loss = loss_conf + 0.5 * loss_tool
+            
             optim.zero_grad()
             loss.backward()
             optim.step()
+            
             tot += loss.item()
             n += 1
-        logger.info("Epoch %d: loss=%.4f", epoch + 1, tot / max(n, 1))
+        logger.info("Epoch %d/%d: loss=%.4f", epoch + 1, epochs, tot / max(n, 1))
 
-    # Temperature scaling on validation.
+    # 6. Temperature scaling on validation
     head.eval()
     all_conf = []
     all_soft = []
     with torch.no_grad():
         for batch in val_loader:
             out = head(batch["q_emb"], batch["e_emb"])
-            all_conf.extend(out["confidence"].squeeze(-1).cpu().tolist())
-            all_soft.extend(batch["soft"].cpu().tolist())
+            
+            # FIX: Ensure tensors are at least 1D for list conversion
+            conf_vals = out["confidence"].squeeze(-1).view(-1).cpu().tolist()
+            soft_vals = batch["soft"].view(-1).cpu().tolist()
+            
+            all_conf.extend(conf_vals)
+            all_soft.extend(soft_vals)
+            
     arr_conf = np.asarray(all_conf)
     arr_soft = np.asarray(all_soft)
-    # Grid-search T in [0.5, 3.0] minimising MSE of scaled confidences.
+    
     best_T, best_mse = 1.0, float("inf")
     for T in np.linspace(0.5, 3.0, 26):
         logits = np.log(arr_conf.clip(1e-6, 1 - 1e-6)
@@ -151,19 +196,32 @@ def train(cfg: Any = None) -> dict[str, Any]:
         if mse < best_mse:
             best_mse = mse
             best_T = float(T)
-    head.temperature = best_T
+            
+    # FIX: Assign temperature as a torch.Tensor to satisfy PyTorch buffer requirements
+    head.temperature = torch.tensor(best_T)
     ece = compute_ece(arr_conf, (arr_soft > 0.5).astype(float))
 
-    out_dir = Path(cfg.checkpoints.confidence_head)
+    # 7. Save results
+    out_dir = Path(train_params.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    head.save(out_dir)
+    
+    # FIX: Provide a full file path instead of just a directory to head.save
+    save_path = out_dir / "confidence_head.pt"
+    head.save(save_path)
+    
     logger.info("Saved confidence head to %s (T=%.3f, ECE=%.4f)",
-                out_dir, best_T, ece)
-    return {"status": "ok", "temperature": best_T, "ece": ece,
-            "output_dir": str(out_dir)}
+                save_path, best_T, ece)
+    
+    return {
+        "status": "ok", 
+        "temperature": float(best_T), 
+        "ece": ece,
+        "output_dir": str(save_path)
+    }
 
 
 def main() -> None:
+    """CLI entry point for training."""
     logging.basicConfig(level=logging.INFO)
     print(json.dumps(train(), indent=2))
 

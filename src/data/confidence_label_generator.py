@@ -5,15 +5,20 @@ For each input query: retrieve the top-k evidence chunks, prompt the
 generator to answer using only those chunks, then score that answer
 against the gold answer via a fast NLI-based similarity score.
 
+Supports resumable generation via checkpoint files. If the process is
+interrupted, re-running with the same output_path will skip
+already-scored queries and append only new labels.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
-from multiprocessing import pool
 import random
+import time
 import torch
+import numpy as np
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -21,12 +26,19 @@ from src.data.schema import ConfidenceLabel, QAPair
 from src.utils.config import get_config
 from src.utils.determinism import set_seed
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
+
 logger = logging.getLogger(__name__)
 
 # FIX 2: Faster model; DeBERTa MNLI is ~3x faster than roberta-large BERTScore
 _DEFAULT_FAST_MODEL = "cross-encoder/nli-deberta-v3-small"
 # FIX 2: Batch size for scoring to avoid OOM
 _SCORE_BATCH_SIZE = 32
+# How often (in queries) to flush labels + checkpoint to disk
+_DEFAULT_CHECKPOINT_INTERVAL = 20
 
 
 def get_best_device() -> str:
@@ -37,11 +49,23 @@ def get_best_device() -> str:
     else:
         return "cpu"
 
+
+def _query_hash(query: str) -> str:
+    """Deterministic short hash of a query string for checkpoint tracking."""
+    return hashlib.sha256(query.encode("utf-8")).hexdigest()[:16]
+
+
 class ConfidenceLabelGenerator:
     """Produce soft-label confidence examples using fast NLI similarity.
 
     FIX 2: Uses a DeBERTa MNLI cross-encoder instead of BERTScore
     (roberta-large) for speed. Scoring is batched to avoid OOM.
+
+    Supports resumable generation: intermediate results are flushed to
+    disk every ``checkpoint_interval`` queries, and a sidecar
+    ``.checkpoint.json`` file tracks which queries have been scored. If
+    the process is interrupted, re-running with the same ``output_path``
+    will skip already-completed queries automatically.
 
     Parameters
     ----------
@@ -59,9 +83,9 @@ class ConfidenceLabelGenerator:
         Target number of labels.
     score_batch_size : int
         Batch size for NLI scoring (FIX 2).
+    checkpoint_interval : int
+        Flush labels and checkpoint to disk every N queries (default 50).
     """
-
-
 
     def __init__(
         self,
@@ -73,6 +97,7 @@ class ConfidenceLabelGenerator:
         limit: int | None = None,
         score_batch_size: int = _SCORE_BATCH_SIZE,
         device: str | None = None,
+        checkpoint_interval: int = _DEFAULT_CHECKPOINT_INTERVAL,
     ) -> None:
         set_seed(seed)
         self.seed = seed
@@ -86,6 +111,7 @@ class ConfidenceLabelGenerator:
         self._generator = generator
         self.top_k = int(top_k)
         self.score_batch_size = int(score_batch_size)
+        self.checkpoint_interval = int(checkpoint_interval)
 
         if limit is not None:
             self.target_count = int(limit)
@@ -97,6 +123,56 @@ class ConfidenceLabelGenerator:
         self._nli_model: Any = None
 
     # ------------------------------------------------------------------
+    # Checkpoint helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _checkpoint_path(output_path: Path) -> Path:
+        """Sidecar checkpoint file lives next to the output JSONL.
+
+        Example: confidence_labels.jsonl -> confidence_labels.checkpoint.json
+        """
+        return output_path.with_suffix(".checkpoint.json")
+
+    @staticmethod
+    def _load_checkpoint(ckpt_path: Path) -> set[str]:
+        """Load the set of already-processed query hashes from disk.
+
+        Returns an empty set if the checkpoint file doesn't exist or is
+        corrupted, so the run starts fresh.
+        """
+        if not ckpt_path.exists():
+            return set()
+        try:
+            data = json.loads(ckpt_path.read_text(encoding="utf-8"))
+            hashes = set(data.get("done_hashes", []))
+            logger.info("Checkpoint loaded: %d queries already done", len(hashes))
+            return hashes
+        except (json.JSONDecodeError, KeyError, TypeError) as exc:
+            logger.warning("Corrupt checkpoint (%s); starting fresh", exc)
+            return set()
+
+    @staticmethod
+    def _save_checkpoint(ckpt_path: Path, done_hashes: set[str]) -> None:
+        """Persist the set of completed query hashes atomically.
+
+        Writes to a temp file first, then renames, so a crash mid-write
+        won't corrupt the checkpoint.
+        """
+        tmp = ckpt_path.with_suffix(".tmp")
+        payload = json.dumps({"done_hashes": sorted(done_hashes)}, ensure_ascii=False)
+        tmp.write_text(payload, encoding="utf-8")
+        tmp.replace(ckpt_path)  # atomic on POSIX
+
+    @staticmethod
+    def _append_jsonl(labels: list[ConfidenceLabel], path: Path) -> None:
+        """Append a batch of labels to the output JSONL file."""
+        with open(path, "a", encoding="utf-8") as fh:
+            for item in labels:
+                payload = item.to_dict() if hasattr(item, "to_dict") else item
+                fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
@@ -105,12 +181,20 @@ class ConfidenceLabelGenerator:
         qa_pairs: Sequence[QAPair],
         output_path: Path | str | None = None,
     ) -> list[ConfidenceLabel]:
-        """Score a batch of QA pairs and emit :class:`ConfidenceLabel` records."""
+        """Score a batch of QA pairs and emit :class:`ConfidenceLabel` records.
+
+        If a previous run was interrupted, already-scored queries are
+        skipped automatically based on the checkpoint file.
+        """
         if not qa_pairs:
             logger.warning("ConfidenceLabelGenerator.generate called with no QA pairs")
             return []
 
         output_path = self._resolve_output(output_path, "confidence_labels.jsonl")
+        ckpt_path = self._checkpoint_path(output_path)
+
+        # --- Resume: load checkpoint and filter out done queries ---
+        done_hashes = self._load_checkpoint(ckpt_path)
 
         gen = self._get_generator()
 
@@ -118,15 +202,31 @@ class ConfidenceLabelGenerator:
         self.rng.shuffle(pool)
         pool = pool[: self.target_count]
 
-        queries: list[str] = []
-        evidence_answers: list[str] = []
-        gold_answers: list[str] = []
-        top5_ids: list[list[str]] = []
+        # Skip queries that were already processed in a previous run
+        if done_hashes:
+            before = len(pool)
+            pool = [qa for qa in pool if _query_hash(qa.query) not in done_hashes]
+            skipped = before - len(pool)
+            logger.info("Resuming: skipped %d already-scored queries", skipped)
 
+        if not pool:
+            logger.info("All queries already processed; nothing to do")
+            # Return labels from the existing output file
+            return self._read_existing_labels(output_path)
+
+        # --- Collect retrieval + generation results in a buffer ---
+        # We accumulate a batch, score it, flush, repeat.
+        buffer_queries: list[str] = []
+        buffer_evidence: list[str] = []
+        buffer_gold: list[str] = []
+        buffer_ids: list[list[str]] = []
+
+        all_labels: list[ConfidenceLabel] = []
         total = len(pool)
+        t_start = time.perf_counter()
 
         for idx, qa in enumerate(pool, 1):
-            logger.info(f"[{idx}/{total}] Processing query: {qa.query[:80]}...")
+            logger.info("[%d/%d] Processing query: %s...", idx, total, qa.query[:80])
             try:
                 retrieved = self.retriever.retrieve(qa.query, top_k=self.top_k)
             except Exception as exc:
@@ -148,16 +248,70 @@ class ConfidenceLabelGenerator:
             if not answer:
                 continue
 
-            queries.append(qa.query)
-            evidence_answers.append(answer)
-            gold_answers.append(qa.answer_with_citations)
-            top5_ids.append(ids)
+            buffer_queries.append(qa.query)
+            buffer_evidence.append(answer)
+            buffer_gold.append(qa.answer_with_citations)
+            buffer_ids.append(ids)
 
-        if not evidence_answers:
-            logger.warning("No evidence answers produced; skipping scoring")
-            return []
+            # --- Intermediate flush every checkpoint_interval queries ---
+            if len(buffer_queries) >= self.checkpoint_interval:
+                batch_labels = self._score_and_build(
+                    buffer_queries, buffer_evidence, buffer_gold, buffer_ids
+                )
+                # Persist to disk immediately
+                self._append_jsonl(batch_labels, output_path)
+                done_hashes.update(_query_hash(q) for q in buffer_queries)
+                self._save_checkpoint(ckpt_path, done_hashes)
+                all_labels.extend(batch_labels)
 
-        # FIX 2: Use fast batched NLI scoring instead of BERTScore
+                logger.info(
+                    "Flushed %d labels (total %d) | elapsed %.1fs",
+                    len(batch_labels),
+                    len(all_labels),
+                    time.perf_counter() - t_start,
+                )
+
+                # Reset buffer
+                buffer_queries.clear()
+                buffer_evidence.clear()
+                buffer_gold.clear()
+                buffer_ids.clear()
+
+        # --- Flush remaining buffer ---
+        if buffer_queries:
+            batch_labels = self._score_and_build(
+                buffer_queries, buffer_evidence, buffer_gold, buffer_ids
+            )
+            self._append_jsonl(batch_labels, output_path)
+            done_hashes.update(_query_hash(q) for q in buffer_queries)
+            self._save_checkpoint(ckpt_path, done_hashes)
+            all_labels.extend(batch_labels)
+
+        elapsed = time.perf_counter() - t_start
+        logger.info(
+            "ConfidenceLabelGenerator wrote %d new labels to %s (%.1fs total)",
+            len(all_labels),
+            output_path,
+            elapsed,
+        )
+        return all_labels
+
+    # ------------------------------------------------------------------
+    # Scoring + label construction (extracted from generate for reuse)
+    # ------------------------------------------------------------------
+
+    def _score_and_build(
+        self,
+        queries: list[str],
+        evidence_answers: list[str],
+        gold_answers: list[str],
+        top5_ids: list[list[str]],
+    ) -> list[ConfidenceLabel]:
+        """Score a batch of evidence vs gold answers and build ConfidenceLabel objects.
+
+        Factored out of ``generate`` so it can be called per-checkpoint-interval
+        without duplicating the scoring + clamping logic.
+        """
         f1_scores = self._fast_similarity_scores(evidence_answers, gold_answers)
 
         labels: list[ConfidenceLabel] = []
@@ -174,13 +328,6 @@ class ConfidenceLabelGenerator:
                     evidence_answer=ev,
                 )
             )
-
-        self._write_jsonl(labels, output_path)
-        logger.info(
-            "ConfidenceLabelGenerator wrote %d labels to %s",
-            len(labels),
-            output_path,
-        )
         return labels
 
     # ------------------------------------------------------------------
@@ -192,10 +339,9 @@ class ConfidenceLabelGenerator:
     ) -> list[float]:
         """Compute soft similarity scores using a fast NLI cross-encoder.
 
-        FIX 2: ~3x faster than BERTScore with roberta-large. Processes
-        pairs in batches of ``self.score_batch_size`` to avoid OOM.
-
-        Falls back to BERTScore if the NLI model fails to load.
+        Processes pairs in batches of ``score_batch_size`` to stay within
+        GPU memory limits. Falls back to BERTScore if the NLI model
+        fails to load.
         """
         try:
             nli = self._get_nli_model()
@@ -214,11 +360,11 @@ class ConfidenceLabelGenerator:
                     # NLI returns [contradiction, entailment, neutral] or
                     # a single entailment score depending on model head.
                     raw = nli.predict(batch)
-                    import numpy as np
 
                     for row in raw:
                         row_arr = np.asarray(row, dtype=float)
                         if row_arr.ndim == 0 or row_arr.size == 1:
+                            # Single score (e.g. regression head)
                             scores.append(float(row_arr.flat[0]))
                         elif row_arr.size == 3:
                             # [contradiction, entailment, neutral] -> softmax -> entailment prob
@@ -251,8 +397,10 @@ class ConfidenceLabelGenerator:
                 "Install with: pip install sentence-transformers"
             ) from exc
         logger.info("Loading fast NLI model: %s", _DEFAULT_FAST_MODEL)
-        self._nli_model = CrossEncoder(_DEFAULT_FAST_MODEL, max_length=512, device=self.device)
-        logger.info(f"Initialized Generator on DEVICE: {self.device}")
+        self._nli_model = CrossEncoder(
+            _DEFAULT_FAST_MODEL, max_length=512, device=self.device
+        )
+        logger.info("Initialized NLI model on DEVICE: %s", self.device)
         return self._nli_model
 
     # ------------------------------------------------------------------
@@ -339,7 +487,31 @@ class ConfidenceLabelGenerator:
         return output_path
 
     @staticmethod
+    def _read_existing_labels(path: Path) -> list[ConfidenceLabel]:
+        """Read back labels from an existing JSONL output file.
+
+        Used when resuming and all queries are already done, so the
+        caller still gets a populated return value.
+        """
+        labels: list[ConfidenceLabel] = []
+        if not path.exists():
+            return labels
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    labels.append(ConfidenceLabel(**data))
+                except (json.JSONDecodeError, TypeError) as exc:
+                    logger.warning("Skipping malformed JSONL line: %s", exc)
+        logger.info("Loaded %d existing labels from %s", len(labels), path)
+        return labels
+
+    @staticmethod
     def _write_jsonl(items: Iterable[Any], path: Path) -> None:
+        """Overwrite the output file with all items (used by legacy callers)."""
         with open(path, "w", encoding="utf-8") as fh:
             for item in items:
                 payload = item.to_dict() if hasattr(item, "to_dict") else item

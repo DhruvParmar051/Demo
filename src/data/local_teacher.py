@@ -1,12 +1,18 @@
-"""Local-only teacher. No API calls.
+"""
+AegisRAG - Local Teacher
 
-Primary backend: ``transformers`` with bf16/fp16 + ``device_map="auto"``.
-Optional backend: ``vllm`` (used automatically when importable and CUDA
-is available) for batched high-throughput generation.
+Batched local inference with no external API calls.
 
-Exports:
-    LocalTeacher  -- ``.generate`` / ``.generate_batch``
-    get_teacher   -- back-compat factory (always returns LocalTeacher)
+Primary backend: HuggingFace ``transformers`` with bf16/fp16 and
+``device_map="auto"``. Optional backend: ``vllm`` (selected automatically
+when importable and CUDA is available) for high-throughput generation.
+
+Exports
+-------
+LocalTeacher
+    ``.generate(prompt)`` / ``.generate_batch(prompts)``
+get_teacher
+    Back-compat factory; always returns a ``LocalTeacher``.
 """
 
 from __future__ import annotations
@@ -14,16 +20,20 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from typing import Any, Iterable
+from typing import Any
 
 logger = logging.getLogger(__name__)
-
 
 _PRIMARY_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 _FALLBACK_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
 
 
+# ---------------------------------------------------------------------------
+# Device/dtype utilities
+# ---------------------------------------------------------------------------
+
 def _pick_dtype():
+    """Return the best available torch dtype for inference."""
     import torch
 
     if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
@@ -36,6 +46,7 @@ def _pick_dtype():
 
 
 def _pick_device() -> str:
+    """Return the preferred device string."""
     import torch
 
     if torch.cuda.is_available():
@@ -45,8 +56,31 @@ def _pick_device() -> str:
     return "cpu"
 
 
+# ---------------------------------------------------------------------------
+# LocalTeacher
+# ---------------------------------------------------------------------------
+
 class LocalTeacher:
-    """Batched local inference with optional vLLM acceleration + prompt cache."""
+    """Batched local inference with optional vLLM acceleration and a prompt cache.
+
+    Parameters
+    ----------
+    model_name : str or None
+        HuggingFace model identifier. Falls back to the ``AEGIS_LOCAL_MODEL``
+        environment variable, then to Qwen2.5-7B-Instruct.
+    fallback_model : str or None
+        Model loaded when the primary model fails to initialise.
+    max_new_tokens : int
+        Maximum tokens generated per call.
+    temperature : float
+        Sampling temperature (0 = greedy).
+    top_p : float
+        Nucleus sampling probability.
+    use_vllm : bool or None
+        Force vLLM on/off. ``None`` auto-detects based on CUDA availability.
+    cache_size : int
+        Maximum number of (prompt, response) pairs to keep in the FIFO cache.
+    """
 
     def __init__(
         self,
@@ -68,42 +102,42 @@ class LocalTeacher:
         self._cache_size = int(cache_size)
 
         want_vllm = use_vllm if use_vllm is not None else self._vllm_wanted()
-        self._backend: str
         if want_vllm:
             try:
                 self._init_vllm()
                 self._backend = "vllm"
             except Exception as exc:
-                logger.warning("vLLM unavailable (%s); falling back to transformers", exc)
+                logger.warning("vLLM unavailable (%s); falling back to transformers.", exc)
                 self._init_hf()
                 self._backend = "hf"
         else:
             self._init_hf()
             self._backend = "hf"
+
         logger.info(
-            "LocalTeacher ready: model=%s backend=%s device=%s",
+            "LocalTeacher ready — model=%s backend=%s device=%s",
             self.model_name,
             self._backend,
             getattr(self, "_device", "n/a"),
         )
 
     # ------------------------------------------------------------------
-    # backend init
+    # Backend initialisation
     # ------------------------------------------------------------------
 
     @staticmethod
     def _vllm_wanted() -> bool:
+        """Return True when vLLM is importable and CUDA is available."""
         try:
             import torch  # noqa: F401
             import vllm  # noqa: F401
             import torch as _t
-
             return _t.cuda.is_available()
         except Exception:
             return False
 
     def _init_vllm(self) -> None:
-        from vllm import LLM, SamplingParams
+        from vllm import LLM, SamplingParams  # type: ignore
 
         self._llm = LLM(
             model=self.model_name,
@@ -121,7 +155,7 @@ class LocalTeacher:
 
     def _init_hf(self) -> None:
         import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
 
         dtype = _pick_dtype()
         device = _pick_device()
@@ -144,16 +178,19 @@ class LocalTeacher:
         try:
             self._tok, self._model = _load(self.model_name)
         except Exception as exc:
-            logger.warning("Primary %s failed (%s); loading fallback %s",
-                           self.model_name, exc, self.fallback_model)
+            logger.warning(
+                "Primary model %s failed (%s); loading fallback %s.",
+                self.model_name, exc, self.fallback_model,
+            )
             self.model_name = self.fallback_model
             self._tok, self._model = _load(self.model_name)
 
     # ------------------------------------------------------------------
-    # public API
+    # Public API
     # ------------------------------------------------------------------
 
     def generate(self, prompt: str, **overrides: Any) -> str:
+        """Generate a single response for *prompt*."""
         return self.generate_batch([prompt], **overrides)[0]
 
     def generate_batch(
@@ -162,32 +199,38 @@ class LocalTeacher:
         temperature: float | None = None,
         max_new_tokens: int | None = None,
     ) -> list[str]:
-        # cache lookup
+        """Generate responses for a batch of prompts, using the cache where possible."""
         keys = [self._key(p) for p in prompts]
         outputs: list[str | None] = [self._cache.get(k) for k in keys]
         todo = [i for i, o in enumerate(outputs) if o is None]
+
         if not todo:
             return [o or "" for o in outputs]
 
         missing = [prompts[i] for i in todo]
-        if self._backend == "vllm":
-            fresh = self._gen_vllm(missing, temperature, max_new_tokens)
-        else:
-            fresh = self._gen_hf(missing, temperature, max_new_tokens)
+        fresh = (
+            self._gen_vllm(missing, temperature, max_new_tokens)
+            if self._backend == "vllm"
+            else self._gen_hf(missing, temperature, max_new_tokens)
+        )
 
         for idx, text in zip(todo, fresh):
             outputs[idx] = text
             self._put_cache(keys[idx], text)
+
         return [o or "" for o in outputs]
 
     # ------------------------------------------------------------------
-    # backend-specific decode
+    # Backend-specific generation
     # ------------------------------------------------------------------
 
     def _gen_vllm(
-        self, prompts: list[str], temperature: float | None, max_new_tokens: int | None
+        self,
+        prompts: list[str],
+        temperature: float | None,
+        max_new_tokens: int | None,
     ) -> list[str]:
-        from vllm import SamplingParams
+        from vllm import SamplingParams  # type: ignore
 
         sp = SamplingParams(
             temperature=self.temperature if temperature is None else float(temperature),
@@ -199,7 +242,10 @@ class LocalTeacher:
         return [o.outputs[0].text.strip() for o in outs]
 
     def _gen_hf(
-        self, prompts: list[str], temperature: float | None, max_new_tokens: int | None
+        self,
+        prompts: list[str],
+        temperature: float | None,
+        max_new_tokens: int | None,
     ) -> list[str]:
         import torch
 
@@ -224,16 +270,16 @@ class LocalTeacher:
                 pad_token_id=self._tok.pad_token_id,
                 eos_token_id=self._tok.eos_token_id,
             )
-        new_tokens = out[:, enc["input_ids"].shape[1] :]
-        texts = self._tok.batch_decode(new_tokens, skip_special_tokens=True)
-        return [t.strip() for t in texts]
+
+        new_tokens = out[:, enc["input_ids"].shape[1]:]
+        return [s.strip() for s in self._tok.batch_decode(new_tokens, skip_special_tokens=True)]
 
     def _format_chat(self, prompt: str) -> str:
+        """Apply the model's chat template to a raw prompt string."""
         if self._backend == "vllm":
-            # vLLM wants raw text; rely on tokenizer's chat template via HF
+            # vLLM needs the formatted string; load the tokenizer once for the template.
             try:
-                from transformers import AutoTokenizer
-
+                from transformers import AutoTokenizer  # type: ignore
                 tok = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
                 return tok.apply_chat_template(
                     [{"role": "user", "content": prompt}],
@@ -249,20 +295,25 @@ class LocalTeacher:
         )
 
     # ------------------------------------------------------------------
-    # cache helpers
+    # Prompt cache helpers
     # ------------------------------------------------------------------
 
     @staticmethod
     def _key(prompt: str) -> str:
+        """Return a 16-byte Blake2b hex digest of the prompt."""
         return hashlib.blake2b(prompt.encode("utf-8"), digest_size=16).hexdigest()
 
-    def _put_cache(self, k: str, v: str) -> None:
+    def _put_cache(self, key: str, value: str) -> None:
+        """Insert into cache with FIFO eviction when at capacity."""
         if len(self._cache) >= self._cache_size:
-            # cheap FIFO eviction
             self._cache.pop(next(iter(self._cache)))
-        self._cache[k] = v
+        self._cache[key] = value
 
+
+# ---------------------------------------------------------------------------
+# Back-compat factory
+# ---------------------------------------------------------------------------
 
 def get_teacher(**kwargs: Any) -> LocalTeacher:
-    """Back-compat factory. Always returns a ``LocalTeacher``."""
+    """Return a :class:`LocalTeacher`. Accepts any ``LocalTeacher.__init__`` kwargs."""
     return LocalTeacher(**kwargs)

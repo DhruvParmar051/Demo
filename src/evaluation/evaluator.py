@@ -145,8 +145,10 @@ class Evaluator:
         pred_decomp: list[bool] = []
         gold_decomp: list[bool] = []
 
+        n_total = len(self.test_set)
         for idx, item in enumerate(self.test_set):
             query = item["query"]
+            logger.info("[%s] query %d/%d: %s", model_tag, idx + 1, n_total, query[:60])
             try:
                 raw = pipeline(query)
                 response = _to_query_response(raw)

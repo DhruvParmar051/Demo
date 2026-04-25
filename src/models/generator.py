@@ -76,10 +76,17 @@ class Generator:
         self.cpu_fallback_model = cpu_fallback_model or getattr(cfg.models.generator, "cpu_fallback_model", None)
         self.adapter_path = adapter_path
         
-        inference_cfg = getattr(cfg, "inference", None)
+        # Resolve GGUF path: explicit arg > config field
+        self.gguf_path = gguf_path or getattr(cfg.models.generator, "gguf_path", None)
 
-        self.backend = backend or getattr(inference_cfg, "backend", "hf")
-        self.gguf_path = gguf_path or getattr(inference_cfg, "gguf_path", None)
+        # Auto-select backend: if a GGUF file is configured and exists on disk,
+        # default to "gguf"; otherwise fall back to "hf".
+        if backend:
+            self.backend = backend
+        elif self.gguf_path and Path(self.gguf_path).exists():
+            self.backend = "gguf"
+        else:
+            self.backend = "hf"
         self.quantize_4bit = quantize_4bit
         self.device = get_device(cfg.device.preferred_device)
         self.device_str = get_device_string(self.device)
@@ -113,7 +120,7 @@ class Generator:
     def generate(
         self,
         prompt: str | None = None,
-        max_new_tokens: int = 256,
+        max_new_tokens: int | None = None,
         temperature: float = 0.0,
         query: str | None = None,
         context: list[RetrievalResult] | None = None,
@@ -125,29 +132,31 @@ class Generator:
         """
         full_prompt = self._build_prompt(prompt, query, context)
         self._ensure_loaded()
+        tokens = max_new_tokens if max_new_tokens is not None else int(self._generation_kwargs["max_new_tokens"])
         if self.backend == "gguf":
-            return self._generate_gguf(full_prompt, max_new_tokens, temperature)
-        return self._generate_hf(full_prompt, max_new_tokens, temperature)
+            return self._generate_gguf(full_prompt, tokens, temperature)
+        return self._generate_hf(full_prompt, tokens, temperature)
 
     def stream(
         self,
         query: str,
         context: list[RetrievalResult] | list[Citation] | None = None,
-        max_new_tokens: int = 256,
+        max_new_tokens: int | None = None,
     ) -> Iterator[str]:
         """Yield tokens one at a time."""
         full_prompt = self._build_prompt(None, query, context)
         self._ensure_loaded()
+        tokens = max_new_tokens if max_new_tokens is not None else int(self._generation_kwargs["max_new_tokens"])
         if self.backend == "gguf":
-            yield from self._stream_gguf(full_prompt, max_new_tokens)
+            yield from self._stream_gguf(full_prompt, tokens)
         else:
-            yield from self._stream_hf(full_prompt, max_new_tokens)
+            yield from self._stream_hf(full_prompt, tokens)
 
     def generate_with_citations(
         self,
         query: str,
         context: list[RetrievalResult],
-        max_new_tokens: int = 256,
+        max_new_tokens: int | None = None,
         temperature: float = 0.0,
     ) -> tuple[str, list[Citation]]:
         """Generate and parse citations out of the answer."""
@@ -342,13 +351,32 @@ class Generator:
                 "Run scripts/convert_to_gguf.py first."
             )
         n_ctx = int(getattr(self.cfg.models.generator, "max_seq_length", 4096))
+
+        # Resolve n_gpu_layers (priority: env var > config > device-based default).
+        # MPS (Apple Silicon) crashes with -1 on many quantized GGUF models.
+        import os as _os
+        # Accept both the nested pydantic-settings form and the short legacy form.
+        _env_gpu = (_os.getenv("AEGIS_MODELS__GENERATOR__GGUF_N_GPU_LAYERS")
+                    or _os.getenv("AEGIS_GGUF_N_GPU_LAYERS"))
+        if _env_gpu is not None:
+            n_gpu_layers = int(_env_gpu)
+        else:
+            _cfg_n_gpu = getattr(self.cfg.models.generator, "gguf_n_gpu_layers", -1)
+            if self.device_str == "mps":
+                n_gpu_layers = 0   # Metal matmul crashes on many quant shapes
+            elif self.device_str == "cuda":
+                n_gpu_layers = int(_cfg_n_gpu)
+            else:
+                n_gpu_layers = 0
+
         self._llama = Llama(
             model_path=str(self.gguf_path),
             n_ctx=n_ctx,
-            n_gpu_layers=-1 if self.device_str != "cpu" else 0,
+            n_gpu_layers=n_gpu_layers,
             verbose=False,
             seed=42,
         )
+        logger.info("GGUF loaded: n_gpu_layers=%d ctx=%d", n_gpu_layers, n_ctx)
 
     # ------------------------------------------------------------------
     # HF generation / streaming
@@ -423,13 +451,16 @@ class Generator:
         llama = self._llama
         if llama is None:
             raise RuntimeError("GGUF backend is not loaded.")
+        _STOP = ["<|user|>", "<|system|>", "<|context|>", "<|assistant|>",
+                 "\n\nIf you need further", "\n\nPlease provide more",
+                 "\n\nIf you have any other"]
         out = llama(
             prompt,
             max_tokens=max_new_tokens,
             temperature=temperature,
             top_p=1.0,
             echo=False,
-            stop=["<|user|>", "<|system|>"],
+            stop=_STOP,
         )
         return out["choices"][0]["text"].strip()
 
@@ -437,6 +468,9 @@ class Generator:
         llama = self._llama
         if llama is None:
             raise RuntimeError("GGUF backend is not loaded.")
+        _STOP = ["<|user|>", "<|system|>", "<|context|>", "<|assistant|>",
+                 "\n\nIf you need further", "\n\nPlease provide more",
+                 "\n\nIf you have any other"]
         for chunk in llama(
             prompt,
             max_tokens=max_new_tokens,
@@ -444,7 +478,7 @@ class Generator:
             top_p=1.0,
             echo=False,
             stream=True,
-            stop=["<|user|>", "<|system|>"],
+            stop=_STOP,
         ):
             piece = chunk["choices"][0]["text"]
             if piece:

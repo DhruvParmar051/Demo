@@ -15,7 +15,7 @@ models:
     pooling_method: "cls"
 
   reranker:
-    name: "jinaai/jina-colbert-v2"
+    name: "cross-encoder/ms-marco-MiniLM-L-6-v2"
     max_seq_length: 8192
     max_query_length: 128
 
@@ -27,16 +27,16 @@ models:
     top_k: 50
     repetition_penalty: 1.1
     do_sample: true
-    gguf_path: null  # Set after conversion; e.g., checkpoints/generator/qwen2.5-7b-q4_k_m.gguf
+    gguf_path: "checkpoints/aegis_final.gguf"
     gguf_n_ctx: 4096
-    gguf_n_gpu_layers: -1  # -1 = offload all layers to GPU
+    gguf_n_gpu_layers: 0  # 0 = CPU only (MPS Metal crashes with quantized attention shapes)
 
   nli:
     name: "cross-encoder/nli-MiniLM2-L6-H768"
     max_seq_length: 256
 
   decomposer:
-    name: "Qwen/Qwen2.5-7B-Instruct"  # shares weights with generator
+    name: "Qwen/Qwen2.5-7B-Instruct" # shares weights with generator
     max_new_tokens: 256
     temperature: 0.2
 
@@ -52,26 +52,26 @@ retrieval:
   bm25_k1: 1.5
   bm25_b: 0.75
   bm25_epsilon: 0.25
-  initial_alpha: 0.5          # dense weight in hybrid fusion (1-alpha = BM25 weight)
+  initial_alpha: 0.5 # dense weight in hybrid fusion (1-alpha = BM25 weight)
   alpha_min: 0.1
   alpha_max: 0.9
   similarity_metric: "cosine"
-  dedup_threshold: 0.92       # MinHash near-dup threshold during ingestion
+  dedup_threshold: 0.92 # MinHash near-dup threshold during ingestion
 
 # ---------------------------------------------------------------------------
 # CGAL (Confidence-Gated Action Loop) Settings
 # ---------------------------------------------------------------------------
 cgal:
   max_iterations: 3
-  high_confidence: 0.85       # >= this: return answer immediately
-  medium_confidence: 0.75     # >= this but < high: verify with NLI, then return
-  low_confidence: 0.40        # >= this but < medium: refine query and retry
+  high_confidence: 0.55   # lowered: confidence head trained on 500 pairs outputs ~0.4-0.7
+  medium_confidence: 0.40  # lowered: trigger NLI verify instead of escalating
+  low_confidence: 0.20     # lowered: retry before escalating
   # below low_confidence: escalate / return "I don't know"
-  verify_low: 0.75            # NLI entailment threshold to accept answer
-  verify_high: 0.85           # NLI entailment threshold for high-confidence accept
+  verify_low: 0.50         # lowered: NLI entailment threshold
+  verify_high: 0.65        # lowered: high-confidence NLI accept
   escalation_message: "I'm not confident enough to answer this accurately. Let me connect you with a human agent."
   enable_query_decomposition: true
-  decomposition_threshold: 0.60  # confidence below which sub-queries are tried
+  decomposition_threshold: 0.35 # lowered to match new scale
 
 # ---------------------------------------------------------------------------
 # Training Settings
@@ -103,7 +103,7 @@ training:
     negatives_per_query: 7
     hard_negative_mining: true
     in_batch_negatives: true
-    loss: "infonce"            # infonce | triplet_margin
+    loss: "infonce" # infonce | triplet_margin
     triplet_margin: 0.2
     temperature: 0.05
     output_dir: "checkpoints/retriever"
@@ -133,17 +133,17 @@ training:
     output_dir: "checkpoints/generator_sft"
 
   dpo:
-    learning_rate: 5.0e-5
+    learning_rate: 5.0e-6
     num_epochs: 1
     batch_size: 1
     gradient_accumulation_steps: 8
     warmup_ratio: 0.1
     weight_decay: 0.01
     max_grad_norm: 1.0
-    beta: 0.1                  # DPO KL penalty coefficient
+    beta: 0.1 # DPO KL penalty coefficient
     max_seq_length: 1536
     max_prompt_length: 768
-    loss_type: "ipo"            # ipo is more stable on tiny datasets
+    loss_type: "ipo" # ipo is more stable on tiny datasets
     # Trainer filters preferences to these rejection types only:
     preference_types:
       - "hallucinated_citation"
@@ -159,8 +159,8 @@ training:
     max_grad_norm: 1.0
     hidden_dim: 256
     dropout: 0.1
-    label_smoothing: 0.05     # soft-label smoothing
-    loss: "kl_divergence"      # kl_divergence | mse | bce
+    label_smoothing: 0.05 # soft-label smoothing
+    loss: "kl_divergence" # kl_divergence | mse | bce
     calibration_method: "temperature_scaling"
     calibration_bins: 15
     output_dir: "checkpoints/confidence_head"
@@ -225,8 +225,8 @@ serving:
   host: "0.0.0.0"
   port: 8000
   workers: 1
-  sse_heartbeat_interval: 15  # seconds
-  request_timeout: 120        # seconds
+  sse_heartbeat_interval: 15 # seconds
+  request_timeout: 120 # seconds
   max_concurrent_requests: 10
   cors_origins:
     - "*"
@@ -236,7 +236,7 @@ serving:
 # Device Settings
 # ---------------------------------------------------------------------------
 device:
-  preferred_device: "auto"    # auto | cpu | cuda | mps
+  preferred_device: "auto" # auto | cpu | cuda | mps
   gpu_memory_utilization: 0.85
 
 # ---------------------------------------------------------------------------
@@ -269,7 +269,7 @@ evaluation:
     - "bertscore_f1"
     - "latency_p50"
     - "latency_p95"
-    - "confidence_ece"          # expected calibration error
+    - "confidence_ece" # expected calibration error
     - "confidence_auroc"
   bertscore_model: "microsoft/deberta-xlarge-mnli"
   num_bootstrap_samples: 1000

@@ -13,8 +13,6 @@ is generated on upload -- chunks alone are enough to power evidence-grounded
 answers.
 """
 
-from __future__ import annotations
-
 import logging
 import shutil
 import tempfile
@@ -61,7 +59,7 @@ def build_ingest_router(config: Any | None = None):
 
     router = APIRouter(tags=["ingest"])
 
-    @router.post("/ingest")
+    @router.post("/ingest", response_model=None)
     async def ingest_files(files: List[UploadFile] = File(...)) -> dict:
         if not files:
             raise HTTPException(status_code=400, detail="No files uploaded.")

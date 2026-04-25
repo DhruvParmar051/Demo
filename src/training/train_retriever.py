@@ -13,16 +13,25 @@ from __future__ import annotations
 import json
 import logging
 import random
+import gc
+import os
 from pathlib import Path
 from typing import Any
+from tqdm import tqdm
 
 from src.utils.config import get_config
 from src.utils.determinism import set_seed
 
+# Configure logging to be clean and non-intrusive for TQDM
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 
 def _load_qa(path: Path) -> list[dict[str, Any]]:
+    """Return the raw non-empty lines of a JSONL file."""
     records: list[dict[str, Any]] = []
     if not path.exists():
         return records
@@ -71,7 +80,10 @@ def _build_hard_negatives(qa: list[dict[str, Any]], k: int = 3) -> None:
 
 def train(cfg: Any = None) -> dict[str, Any]:
     """Train the retriever with MNRL."""
-    cfg = cfg if cfg is not None else get_config()
+    # CRITICAL FIX for Mac OOM: Allow PyTorch to use all available Unified Memory
+    os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+    
+    cfg = get_config()
     set_seed(42)
 
     try:
@@ -90,8 +102,7 @@ def train(cfg: Any = None) -> dict[str, Any]:
         logger.warning("No QA pairs at %s; nothing to train on.", qa_path)
         return {"status": "skipped", "reason": "no_data"}
 
-    # FIX 7: Use config value for hard negatives (was hard-coded 3, now uses
-    # cfg.training.retriever.hard_negatives which defaults to 7)
+    # Use config value for hard negatives
     hard_neg_count = int(cfg.training.retriever.hard_negatives)
     logger.info("Building hard negatives with k=%d (from config)", hard_neg_count)
     _build_hard_negatives(qa, k=hard_neg_count)
@@ -99,6 +110,17 @@ def train(cfg: Any = None) -> dict[str, Any]:
     model_name = cfg.models.retriever.name
     logger.info("Loading retriever base %s", model_name)
     model = SentenceTransformer(model_name)
+
+    # Hardware-agnostic device selection (CUDA > MPS > CPU)
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+
+    model.to(device)
+    logger.info("Retriever training running on: %s", device)
 
     epochs = int(cfg.training.retriever.epochs)
     batch_size = int(cfg.training.retriever.batch_size)
@@ -129,18 +151,34 @@ def train(cfg: Any = None) -> dict[str, Any]:
     optim = torch.optim.AdamW(model.parameters(), lr=lr)
 
     best_loss = float("inf")
+    
+    # MEMORY SETTINGS: Increase accumulation_steps if OOM persists
+    accumulation_steps = 4 
+    
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
         n = 0
-        for batch in loader:
+        
+        # Clean UI: Progress bar is the primary feedback source
+        pbar = tqdm(loader, total=len(loader), desc=f"Epoch {epoch + 1}", leave=True)
+        optim.zero_grad()
+
+        for i, batch in enumerate(pbar):
             queries = [b["query"] for b in batch]
             positives = [b["positive"] for b in batch]
-            q_emb = model.encode(queries, convert_to_tensor=True,
-                                  show_progress_bar=False)
-            p_emb = model.encode(positives, convert_to_tensor=True,
-                                  show_progress_bar=False)
+            
+            # Tokenize and move to device
+            features_q = model.tokenize(queries)
+            features_p = model.tokenize(positives)
+            for k in features_q: features_q[k] = features_q[k].to(device)
+            for k in features_p: features_p[k] = features_p[k].to(device)
 
+            # Forward pass (keeping gradients)
+            q_emb = model(features_q)['sentence_embedding']
+            p_emb = model(features_p)['sentence_embedding']
+
+            # Hard Negatives Processing
             hn_emb = None
             hn_rows = [b["hard_negatives"] for b in batch]
             if any(hn_rows):
@@ -148,33 +186,52 @@ def train(cfg: Any = None) -> dict[str, Any]:
                 if max_k > 0:
                     flat = [h for row in hn_rows for h in row]
                     if flat:
-                        flat_emb = model.encode(flat, convert_to_tensor=True,
-                                                 show_progress_bar=False)
+                        features_hn = model.tokenize(flat)
+                        for k in features_hn: features_hn[k] = features_hn[k].to(device)
+                        flat_emb = model(features_hn)['sentence_embedding']
+                        
                         padded = []
                         offset = 0
                         for row in hn_rows:
                             if not row:
-                                padded.append(p_emb[len(padded)].unsqueeze(0)
-                                              .repeat(max_k, 1))
+                                padded.append(p_emb[len(padded)].unsqueeze(0).repeat(max_k, 1))
                             else:
                                 row_emb = flat_emb[offset:offset + len(row)]
                                 offset += len(row)
                                 if row_emb.size(0) < max_k:
-                                    pad = row_emb[-1:].repeat(
-                                        max_k - row_emb.size(0), 1
-                                    )
+                                    pad = row_emb[-1:].repeat(max_k - row_emb.size(0), 1)
                                     row_emb = torch.cat([row_emb, pad], dim=0)
                                 padded.append(row_emb)
                         hn_emb = torch.stack(padded, dim=0)
 
+            # --- Backprop with Gradient Accumulation ---
             loss = loss_fn(q_emb, p_emb, hn_emb)
-            optim.zero_grad()
-            loss.backward()
-            optim.step()
-            epoch_loss += loss.item()
+            current_batch_loss = loss.item()
+            
+            # Scale loss and calculate gradients
+            (loss / accumulation_steps).backward()
+
+            if (i + 1) % accumulation_steps == 0:
+                optim.step()
+                optim.zero_grad()
+                
+                # Aggressive Memory Clearing
+                if device.type == "mps":
+                    torch.mps.empty_cache()
+                elif device.type == "cuda":
+                    torch.cuda.empty_cache()
+                gc.collect()
+
+            # Update Metrics and UI
+            epoch_loss += current_batch_loss
             n += 1
+            pbar.set_postfix({"loss": f"{current_batch_loss:.4f}"})
+            
+            # Explicitly delete tensors to assist garbage collector
+            del q_emb, p_emb, hn_emb, loss
+
         avg = epoch_loss / max(n, 1)
-        logger.info("Epoch %d: loss=%.4f", epoch + 1, avg)
+        tqdm.write(f"==> Epoch {epoch + 1} Complete | Avg Loss: {avg:.4f}")
         best_loss = min(best_loss, avg)
 
     out_dir = Path(cfg.checkpoints.retriever)

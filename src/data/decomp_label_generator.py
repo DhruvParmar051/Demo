@@ -20,6 +20,7 @@ from src.data.schema import DecompLabel, QAPair
 from src.utils.config import get_config
 from src.utils.determinism import set_seed
 
+# Initialize logger
 logger = logging.getLogger(__name__)
 
 
@@ -74,13 +75,17 @@ class DecompLabelGenerator:
             logger.warning("DecompLabelGenerator.generate called with no QA pairs")
             return []
 
+        logger.info("Starting label generation for %d total target labels", self.per_class * 2)
         output_path = self._resolve_output(output_path, "decomp_labels.jsonl")
 
         multi: list[QAPair] = []
         single: list[QAPair] = []
         pool = list(qa_pairs)
+        
+        logger.debug("Shuffling input pool of %d items", len(pool))
         self.rng.shuffle(pool)
 
+        # Heuristic Sorting
         for qa in pool:
             if self._looks_multi_part(qa.query):
                 if len(multi) < self.per_class:
@@ -94,8 +99,7 @@ class DecompLabelGenerator:
         # Guarantee we have ``per_class`` of each: top up from full pool.
         if len(multi) < self.per_class:
             logger.info(
-                "Only %d multi-part candidates found heuristically; "
-                "padding by sampling",
+                "Only %d multi-part candidates found heuristically; padding by sampling",
                 len(multi),
             )
             extras = [q for q in pool if q not in multi]
@@ -103,16 +107,20 @@ class DecompLabelGenerator:
             multi.extend(extras[:needed])
 
         if len(single) < self.per_class:
+            logger.info("Padding single-part class to reach %d items", self.per_class)
             extras = [q for q in pool if q not in single and q not in multi]
             needed = self.per_class - len(single)
             single.extend(extras[:needed])
 
         labels: list[DecompLabel] = []
 
-        for qa in multi:
+        # Process Multi-part (Likely involves LLM calls)
+        logger.info("Processing %d multi-part queries (Teacher LLM phase)", len(multi))
+        for i, qa in enumerate(multi, 1):
             sub_qs = self._split_with_teacher(qa.query)
             if not sub_qs or len(sub_qs) < 2:
                 sub_qs = self._heuristic_split(qa.query)
+            
             labels.append(
                 DecompLabel(
                     query=qa.query,
@@ -120,7 +128,11 @@ class DecompLabelGenerator:
                     sub_queries=sub_qs,
                 )
             )
+            if i % 25 == 0:
+                logger.info("Multi-part progress: %d/%d", i, len(multi))
 
+        # Process Single-part
+        logger.info("Processing %d single-part queries", len(single))
         for qa in single:
             labels.append(
                 DecompLabel(
@@ -131,9 +143,12 @@ class DecompLabelGenerator:
             )
 
         self.rng.shuffle(labels)
+        
+        logger.info("Writing results to: %s", output_path)
         self._write_jsonl(labels, output_path)
+        
         logger.info(
-            "DecompLabelGenerator wrote %d labels (%d multi, %d single) to %s",
+            "DecompLabelGenerator successfully wrote %d labels (%d multi, %d single)",
             len(labels),
             len(multi),
             len(single),
@@ -158,17 +173,14 @@ class DecompLabelGenerator:
     @staticmethod
     def _heuristic_split(query: str) -> list[str]:
         """Split a query on `?` or coordinating conjunctions."""
-        # Split on '?' while keeping the mark with the preceding segment.
         segments: list[str] = []
         if "?" in query:
             parts = re.split(r"(?<=\?)\s+", query)
             segments = [p.strip() for p in parts if p.strip()]
         else:
             parts = _CONJUNCTION_RE.split(query)
-            # re.split with capture keeps delimiters; drop them.
             segments = [p.strip() for p in parts if p and not _CONJUNCTION_RE.fullmatch(p.strip())]
 
-        # Clean up; ensure at least 2 segments.
         segments = [s for s in segments if len(s) > 3]
         if len(segments) < 2:
             return [query]
@@ -191,6 +203,9 @@ class DecompLabelGenerator:
             f"QUERY: {query}\n"
         )
         try:
+            # Short snippet logging for debugging
+            q_brief = (query[:50] + '...') if len(query) > 50 else query
+            logger.debug("Teacher processing: %s", q_brief)
             raw = teacher.generate(prompt)
         except Exception as exc:
             logger.warning("Teacher split failed: %s", exc)

@@ -1,23 +1,28 @@
 """
-Train the multi-part query DecompositionClassifier (binary).
-
-Also serialises the 3-shot splitter prompt used at inference time so the
-runtime :class:`QuerySplitter` can load it from disk without hardcoding.
+AegisRAG: Multi-part Query Decomposition Trainer
+------------------------------------------------
+This script trains a binary classifier to detect if a query is 'multi-part'
+and serializes the few-shot prompt used for LLM-based splitting.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import torch
+import torch.nn.functional as F
 from pathlib import Path
 from typing import Any
+from torch.utils.data import DataLoader, Dataset
 
 from src.utils.config import get_config
 from src.utils.determinism import set_seed
+from src.decomposer.classifier import DecompositionClassifier
+from src.retrieval.vector_store import ChromaVectorStore
 
 logger = logging.getLogger(__name__)
 
-
+# --- Few-Shot Prompt for LLM Runtime ---
 _SPLITTER_PROMPT = """You split multi-part customer-support questions into
 atomic sub-questions. Reply with a JSON array of strings.
 
@@ -37,101 +42,128 @@ Now split:
 Q: {query}
 A:"""
 
+class ConfigMapper(dict):
+    """Allows dot-notation access (e.g., cfg.training.epochs) for standard dicts."""
+    def __getattr__(self, name):
+        try:
+            value = self[name]
+            if isinstance(value, dict):
+                return ConfigMapper(value)
+            return value
+        except KeyError:
+            raise AttributeError(f"Config object has no attribute '{name}'")
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    """Helper to load synthetic training data."""
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8") as f:
         return [json.loads(l) for l in f if l.strip()]
 
+def _save_prompt(out_dir: Path) -> None:
+    """Saves the prompt to disk so QuerySplitter can load it without hardcoding."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    prompt_path = out_dir / "splitter_prompt.txt"
+    prompt_path.write_text(_SPLITTER_PROMPT, encoding="utf-8")
+    logger.info("Serialized splitter prompt to %s", prompt_path)
 
 def train(cfg: Any = None) -> dict[str, Any]:
-    cfg = cfg if cfg is not None else get_config()
+    """
+    Main training entry point.
+    1. Loads embeddings via Chroma's encoder.
+    2. Trains a Binary Classifier (multi-part vs. single-part).
+    3. Saves model weights and splitting prompt.
+    """
+    # 1. Initialization
+    raw_cfg = cfg if cfg is not None else get_config()
+    cfg = ConfigMapper(raw_cfg) if isinstance(raw_cfg, dict) else raw_cfg
     set_seed(42)
 
-    try:
-        import torch  # type: ignore
-        import torch.nn.functional as F  # type: ignore
-        from torch.utils.data import DataLoader, Dataset  # type: ignore
-    except ImportError as exc:
-        logger.error("torch required: %s", exc)
-        return {"status": "skipped", "reason": "deps_missing"}
+    # 2. Path & Data Handling
+    labels_path = Path(cfg.data.synthetic.decomp_labels_path)
+    out_dir = Path(cfg.checkpoints.decomposer)
+    labels = _load_jsonl(labels_path)
 
-    from src.decomposer.classifier import DecompositionClassifier
-    from src.retrieval.vector_store import ChromaVectorStore
-
-    labels = _load_jsonl(Path(cfg.data.synthetic.decomp_labels_path))
+    # If no data, we only update the prompt and exit gracefully
     if not labels:
-        # Even if no training data, save the splitter prompt.
-        _save_prompt(Path(cfg.checkpoints.decomposer))
+        logger.warning("No synthetic labels found at %s. Saving prompt only.", labels_path)
+        _save_prompt(out_dir)
         return {"status": "skipped", "reason": "no_labels_prompt_saved"}
 
-    encoder = ChromaVectorStore().model
+    # 3. Model Setup
+    # We use the existing embedding model from Chroma to ensure consistency
+    vector_store = ChromaVectorStore()
+    encoder = vector_store.model 
     dim = encoder.get_sentence_embedding_dimension()
+    
     clf = DecompositionClassifier(embedding_dim=dim)
-
-    class _Dataset(Dataset):
+    
+    # Dataset and Collate for embedding queries on the fly
+    class DecompDataset(Dataset):
         def __init__(self, recs: list[dict[str, Any]]):
             self.recs = recs
+        def __len__(self) -> int: return len(self.recs)
+        def __getitem__(self, i: int) -> dict[str, Any]: return self.recs[i]
 
-        def __len__(self) -> int:
-            return len(self.recs)
-
-        def __getitem__(self, i: int) -> dict[str, Any]:
-            return self.recs[i]
-
-    def collate(batch: list[dict[str, Any]]) -> dict[str, Any]:
+    def collate_fn(batch: list[dict[str, Any]]) -> dict[str, Any]:
         queries = [b["query"] for b in batch]
-        lbl = torch.tensor(
+        labels_tensor = torch.tensor(
             [1.0 if b.get("is_multi_part") else 0.0 for b in batch],
             dtype=torch.float32,
         )
-        emb = torch.tensor(
+        # Encode text to embeddings
+        embeddings = torch.tensor(
             encoder.encode(queries, normalize_embeddings=True),
             dtype=torch.float32,
         )
-        return {"emb": emb, "label": lbl}
+        return {"emb": embeddings, "label": labels_tensor}
 
-    bs = int(cfg.training.decomposer.batch_size)
-    lr = float(cfg.training.decomposer.learning_rate)
-    epochs = int(cfg.training.decomposer.epochs)
+    # 4. Training Parameters
+    try:
+        bs = int(cfg.training.decomposer.batch_size)
+        lr = float(cfg.training.decomposer.learning_rate)
+        epochs = int(cfg.training.decomposer.epochs)
+    except AttributeError as e:
+        logger.error("Missing config keys for decomposer training: %s", e)
+        return {"status": "error", "message": "config_incomplete"}
 
-    split = int(0.9 * len(labels))
-    tr, va = labels[:split], labels[split:]
-    loader = DataLoader(_Dataset(tr), batch_size=bs, shuffle=True,
-                        collate_fn=collate)
-    optim = torch.optim.Adam(clf.parameters(), lr=lr)
+    split_idx = int(0.9 * len(labels))
+    train_data = labels[:split_idx]
+    loader = DataLoader(DecompDataset(train_data), batch_size=bs, shuffle=True, collate_fn=collate_fn)
+    optimizer = torch.optim.Adam(clf.parameters(), lr=lr)
 
+    # 5. Training Loop
+    logger.info("Starting Decomposer training: %d samples, %d epochs", len(train_data), epochs)
     for epoch in range(epochs):
         clf.train()
-        tot, n = 0.0, 0
+        total_loss, n_batches = 0.0, 0
         for batch in loader:
+            optimizer.zero_grad()
             logits = clf.forward(batch["emb"]).squeeze(-1)
             loss = F.binary_cross_entropy_with_logits(logits, batch["label"])
-            optim.zero_grad()
             loss.backward()
-            optim.step()
-            tot += loss.item()
-            n += 1
-        logger.info("Epoch %d: loss=%.4f", epoch + 1, tot / max(n, 1))
+            optimizer.step()
+            total_loss += loss.item()
+            n_batches += 1
+        
+        avg_loss = total_loss / max(n_batches, 1)
+        logger.info("Epoch %d/%d - Loss: %.4f", epoch + 1, epochs, avg_loss)
 
-    out_dir = Path(cfg.checkpoints.decomposer)
+    # 6. Saving Artifacts
     out_dir.mkdir(parents=True, exist_ok=True)
-    clf.save(out_dir)
+    save_path = out_dir / "decomposer.pt"
+    
+    # Using the classifier's internal save method or standard torch save
+    if hasattr(clf, 'save'):
+        clf.save(str(save_path))
+    else:
+        torch.save(clf.state_dict(), save_path)
+        
     _save_prompt(out_dir)
-    logger.info("Saved decomposer to %s", out_dir)
-    return {"status": "ok", "output_dir": str(out_dir)}
-
-
-def _save_prompt(out_dir: Path) -> None:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "splitter_prompt.txt").write_text(_SPLITTER_PROMPT, encoding="utf-8")
-
-
-def main() -> None:
-    logging.basicConfig(level=logging.INFO)
-    print(json.dumps(train(), indent=2))
-
+    
+    logger.info("Training complete. Model saved to %s", save_path)
+    return {"status": "ok", "checkpoint": str(save_path)}
 
 if __name__ == "__main__":
-    main()
+    logging.basicConfig(level=logging.INFO)
+    train()

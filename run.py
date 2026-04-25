@@ -80,7 +80,7 @@ def cmd_ingest(args: argparse.Namespace, cfg: dict) -> None:
     vector_db_path = args.vector_db_path or cfg["data"]["vector_db_path"]
     bm25_index_path = cfg["data"]["bm25_index_path"]
 
-    logger.info(f"Ingesting documents from {source_dir}")
+    logger.info("Ingesting documents from %s", source_dir)
     run_ingestion(
         source_dir=source_dir,
         vector_db_path=vector_db_path,
@@ -107,7 +107,7 @@ def cmd_generate_data(args: argparse.Namespace, cfg: dict) -> None:
         logger.error(f"Invalid data type '{data_type}'. Must be one of: {valid_types}")
         sys.exit(1)
 
-    logger.info(f"Generating synthetic data: type={data_type}, output={output_dir}")
+    logger.info("Generating synthetic data: type=%s, output=%s", data_type, output_dir)
     run_data_generation(
         data_type=data_type,
         output_dir=output_dir,
@@ -129,9 +129,9 @@ def cmd_train(args: argparse.Namespace, cfg: dict) -> None:
         logger.error(f"Invalid component '{component}'. Must be one of: {valid_components}")
         sys.exit(1)
 
-    logger.info(f"Training component: {component}")
+    logger.info("Training component: %s", component)
     run_training(component=component, config=cfg)
-    logger.info(f"Training complete for: {component}")
+    logger.info("Training complete for: %s", component)
 
 
 def cmd_evaluate(args: argparse.Namespace, cfg: dict) -> None:
@@ -142,12 +142,14 @@ def cmd_evaluate(args: argparse.Namespace, cfg: dict) -> None:
     test_dir = args.test_dir or "data/test"
     output_dir = args.output_dir or "report"
 
-    logger.info(f"Evaluating models: {models}")
+    logger.info("Evaluating models: %s", models)
+    # Pass config=None so pipelines call get_config() internally and receive
+    # a proper AegisConfig object (not the raw YAML dict from load_config()).
     run_evaluation(
         models=models,
         test_dir=test_dir,
         output_dir=output_dir,
-        config=cfg,
+        config=None,
     )
     logger.info("Evaluation complete.")
 
@@ -160,9 +162,11 @@ def cmd_serve(args: argparse.Namespace, cfg: dict) -> None:
     port = args.port or cfg["serving"]["port"]
     model_tag = args.model
 
-    logger.info(f"Starting server on {host}:{port} with model config '{model_tag}'")
+    logger.info("Starting server on %s:%s with model config '%s'", host, port, model_tag)
 
-    app = create_app(model_tag=model_tag, config=cfg)
+    # Pass config=None so create_app calls get_config() and receives a
+    # proper AegisConfig object (not the raw YAML dict from load_config()).
+    app = create_app(model_tag=model_tag, config=None)
 
     import uvicorn
     uvicorn.run(
@@ -187,12 +191,14 @@ def cmd_query(args: argparse.Namespace, cfg: dict) -> None:
         logger.error("--query is required.")
         sys.exit(1)
 
-    logger.info(f"Querying model '{model_tag}': {query_text[:80]}...")
+    logger.info("Querying model '%s': %s...", model_tag, query_text[:80])
+    # Pass None so M5Pipeline calls get_config() internally and receives a
+    # proper AegisConfig object (not the raw YAML dict from load_config()).
     result = query_model(
         model_tag=model_tag,
         query=query_text,
         stream=stream,
-        config=cfg,
+        config=None,
     )
 
     if stream:
@@ -215,7 +221,7 @@ def cmd_benchmark(args: argparse.Namespace, cfg: dict) -> None:
     n = args.n
 
     logger.info(f"Benchmarking model '{model_tag}' with {n} queries")
-    results = run_benchmark(model_tag=model_tag, n=n, config=cfg)
+    results = run_benchmark(model_tag=model_tag, n=n, config=None)
 
     print("\n--- Benchmark Results ---")
     print(f"  Model:          {model_tag}")
@@ -235,7 +241,7 @@ def cmd_calibrate(args: argparse.Namespace, cfg: dict) -> None:
     model_tag = args.model
 
     logger.info(f"Calibrating confidence head for model '{model_tag}'")
-    result = run_calibration(model_tag=model_tag, config=cfg)
+    result = run_calibration(model_tag=model_tag, config=None)
 
     print("\n--- Calibration Results ---")
     print(f"  Model:               {model_tag}")
@@ -252,7 +258,7 @@ def cmd_test_decomp(args: argparse.Namespace, cfg: dict) -> None:
     n = args.n
 
     logger.info(f"Testing query decomposition with {n} samples")
-    results = run_decomposition_test(n=n, config=cfg)
+    results = run_decomposition_test(n=n, config=None)
 
     print(f"\n--- Decomposition Test ({n} samples) ---")
     for i, r in enumerate(results, 1):

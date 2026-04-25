@@ -1,0 +1,295 @@
+{
+  "model_tag": "b1",
+  "n_queries": 10,
+  "per_query": [
+    {
+      "query": "When must you redetermine the estimated useful life?",
+      "model_tag": "b1",
+      "answer": "You must redetermine the estimated useful life under certain conditions, as outlined in the context provided. Specifically, the context states:\n\n- If you redetermine the useful life of property, you can also redetermine the salvage value. [65b40bba49859022:0-0]\n\n- Changes in useful life should be based on certain facts, and you can adjust your estimate of the useful life if these facts change significantly. [65b40bba49859022:0-0]\n\n- In the absence of program instructions, A/B MACS (B) may determine the reasonable useful lifetime of equipment, but in no case can it be less than 5 years. [fa0f6acfc2df3f4c:0-0]\n\nTherefore, the estimated useful life should be redetermined when there is a significant change in the facts that affect the useful life of the property. [65b40bba49859022:0-0]\n\nFor more specific guidance, you may need to consult the relevant program instructions or seek further clarification from the applicable regulatory body. [fa0f6acfc2df3f4c:0-0] \n\nIf you have a specific scenario or need further details, please provide more context. [65b40bba49859022:0-0] <citation needed> [fa0f6acfc2df3f4c:0-0] [65b40bba49859022:0-0] \n\n[Note: The citation [citation needed] indicates that the exact conditions for redetermining the useful life were not explicitly stated in the provided context, and further clarification might be required.] <citation needed> [65b40bba49859022:0-0] [fa0f6acfc2df3f4c:0-0] [65b40bba49859022:0-0] \n\nIf you need more detailed information, I recommend consulting the full document or a professional advisor. [65b40bba49859022:0-0] [citation needed] [65b40bba49859022:0-0] [fa0",
+      "latency_ms": 27792.56720902049,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.48132780082987553,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "bertscore_f1": NaN,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.75,
+        "completeness": 1.0,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "When do services furnished on or after January 1, 2024, require reporting under Division FF, section 4136 of the CAA, 2023?",
+      "model_tag": "b1",
+      "answer": "The context provided does not explicitly mention the requirements under Division FF, section 4136 of the CAA, 2023. The context focuses on Medicare Part B services, RHCs, FQHCs, and certain service requirements effective from 2019 onwards. For precise information on Division FF, section 4136 of the CAA, 2023, it would be necessary to refer to the specific legislation or regulations that pertain to that division. \n\nI suggest consulting the official documentation or a legal/medical expert familiar with the CAA, 2023, to obtain accurate and up-to-date information. [fa0f6acfc2df3f4c:0-0]",
+      "latency_ms": 17240.547374996822,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.33695652173913043,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "bertscore_f1": NaN,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.75,
+        "completeness": 1.0,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What must be true first, then second, and what happens next for a grant recipient to satisfy the service obligation by teaching history?",
+      "model_tag": "b1",
+      "answer": "For a grant recipient to satisfy the service obligation by teaching history, the following must occur in sequence:\n\n1. **First, history must be designated as a high-need field in the state where the recipient is teaching at the time they received a TEACH Grant.** [49b040580e3ee33d:121-136]\n\n2. **Second, the recipient must begin teaching in that state.** [49b040580e3ee33d:137-140]\n\n3. **Next, the recipient can satisfy the service obligation by teaching history, even if history is no longer designated as a high-need field when the recipient begins teaching.** [49b040580e3ee33d:141-146]\n\nThis sequence ensures that the recipient meets the conditions set by the TEACH Grant program to fulfill their service obligation through teaching in a high-need field. [49b040580e3ee33d:147-152] \n\nIf you have any further questions or need more details, feel free to ask! [49b040580e3ee33d:153-154]",
+      "latency_ms": 21114.74479100434,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.08571428571428572,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "bertscore_f1": NaN,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.75,
+        "completeness": 1.0,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Why do some locations offer free electronic filing while others do not?",
+      "model_tag": "b1",
+      "answer": "Some locations offer free electronic filing through programs like Free File and Free File Fillable Forms, which are provided by the IRS and various tax software providers. These programs are designed to assist low-income taxpayers and others who may not have the means to pay for tax preparation services. The availability of these free services can vary by location and is often dependent on the partnerships between the IRS and local organizations that offer these services.\n\nFor example, the Volunteer Income Tax Assistance (VITA) program and the Tax Counseling for the Elderly (TCE) program provide free tax preparation and electronic filing services to eligible taxpayers. These services are typically offered at specific locations such as community centers, libraries, and other community organizations.\n\nOther locations might not offer these free services due to a lack of local partnerships or funding. Additionally, some businesses, such as employers or financial institutions, may offer free e-file as a benefit to their employees or members, but this is not universally available.\n\nTo determine if free electronic filing is available in a specific location, one can visit the IRS website or contact local community organizations that offer tax assistance services. [286f6a21af2586f3:0-0] [2691a5ae27cd64e6:0-0] [286f6a21af2586f3:0-0] [5eb79f605a0b6fad:0-0] [286f6a21af2586f3:0-0] \n\nIf you need more detailed information or assistance, please let me know. [doc_id:start-end] indicates the citation to the provided context. If the context is insufficient, I would suggest escalating the query.",
+      "latency_ms": 21731.395084003452,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6081632653061224,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "bertscore_f1": NaN,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.75,
+        "completeness": 1.0,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the time frame for viewing 5 years of payment history?",
+      "model_tag": "b1",
+      "answer": "According to the provided context, you can view 5 years of payment history by going to IRS.gov/Refunds or using the official IRS2Go app on your mobile device. [19ce71d0894256bc:0-0] [21d49a083f56884d:0-0] \n\nNo specific time frame is mentioned for viewing 5 years of payment history directly, but these tools allow you to check your refund status and payment history over the past 5 years. [19ce71d0894256bc:0-0] [21d49a083f56884d:0-0] \n\nIf you need more detailed information or have further questions, please let me know. [5914541b4184011a:0-0] [19ce71d0894256bc:0-0] [21d49a083f56884d:0-0]",
+      "latency_ms": 15244.430457998533,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.3020833333333333,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "bertscore_f1": NaN,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.75,
+        "completeness": 1.0,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "If an individual is not a bona fide resident of Puerto Rico for the tax year, what must they do?",
+      "model_tag": "b1",
+      "answer": "If an individual is not a bona fide resident of Puerto Rico for the tax year, they may have to file tax returns with both Puerto Rico and the United States. Specifically, they should:\n\n1. File a Puerto Rico tax return reporting only their income from Puerto Rico sources.\n2. File a U.S. tax return as a U.S. citizen or resident alien, even if they are not a bona fide resident of Puerto Rico for the tax year.\n\nFor more detailed information, you can refer to the provided context or consult Publication 519, which contains additional information on tax topics for individuals with income from sources outside the United States. [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [62af77477dbd3006:0-0] [",
+      "latency_ms": 28356.868791976012,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5088757396449705,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "bertscore_f1": NaN,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.75,
+        "completeness": 1.0,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How is the total medical expense calculated for driving 2,800 miles in 2025?",
+      "model_tag": "b1",
+      "answer": "To calculate the total medical expense for driving 2,800 miles in 2025, you can use either the actual expenses method or the standard mileage rate method.\n\n1. **Actual Expenses Method:**\n   - Gas: $400\n   - Oil: $30\n   - Toll and Parking: $100\n   - Total: $400 + $30 + $100 = $530\n\n2. **Standard Mileage Rate Method:**\n   - Standard mileage rate for 2025: 21 cents per mile\n   - 2,800 miles \u00d7 21 cents/mile = $588\n   - Add tolls and parking: $588 + $100 = $688\n\nSo, the total medical expense for driving 2,800 miles in 2025 would be $530 using the actual expenses method or $688 using the standard mileage rate method. [43161ee941dc0186:0-0] [286f6a21af2586f3:0-0] [43161ee941dc0186:0-0] [aab59ecbdba31230:0-0]",
+      "latency_ms": 22165.7319169899,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.625,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "bertscore_f1": NaN,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.75,
+        "completeness": 1.0,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the maximum value of holiday or birthday gifts that employees can exclude from gross income without reporting?",
+      "model_tag": "b1",
+      "answer": "The maximum value of holiday or birthday gifts that employees can exclude from gross income without reporting is up to $7,500 per year ($3,750 if married filing separately). This exclusion applies to gifts with a low fair market value (FMV) provided to employees under special benefits received under a DCAP (Defined Contribution Arrangement Plan). [8121baaf9803e2ee:12-22]",
+      "latency_ms": 14675.540208991151,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.0,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "bertscore_f1": NaN,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.75,
+        "completeness": 1.0,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Who qualifies for the solar or wind energy credit under section 48(a)(3)(A)?",
+      "model_tag": "b1",
+      "answer": "According to the provided context, property that qualifies for the solar or wind energy credit under section 48(a)(3)(A) includes:\n\n\"Energy property described in section 48(a)(3)(A) (or would be described if 'solar or wind energy' were substituted for 'solar energy' in section 48(a)(3)(A)(i)).\" [af6c8bb6ff0481b2:0-0]\n\nThis indicates that the credit applies to energy property that would be described if \"solar or wind energy\" were substituted for \"solar energy\" in section 48(a)(3)(A)(i). However, the exact details of what constitutes such property are not explicitly stated in the given context. For more detailed information, you may need to refer to the relevant sections of the Internal Revenue Code or consult a tax professional. [af6c8bb6ff0481b2:0-0] \n\nFor further clarification, you might want to consult the full text of the Internal Revenue Code or seek advice from a tax expert. [af6c8bb6ff0481b2:0-0]",
+      "latency_ms": 20622.220499994,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5909090909090909,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "bertscore_f1": NaN,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.75,
+        "completeness": 1.0,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the period during which deductions would not be made for days spent in a psychiatric hospital?",
+      "model_tag": "b1",
+      "answer": "Deductions would not be made for days spent in a psychiatric hospital during the preceding 150 days, even though the institution is later certified for participation as a psychiatric hospital. [65c69dd6643df39a:0-0] \n\nThis period starts from the individual's first day of entitlement. [65c69dd6643df39a:0-0] \n\nFor example, if a patient's Medicare became effective on April 1, and they were in a psychiatric hospital from January 1 to January 15, those 15 days would not result in a deduction because they fall within the 150-day period preceding the first day of entitlement. [65c69dd6643df39a:0-0] \n\nHowever, if the patient was in a general hospital for 15 days during this period, those days would not be deducted either, as the deduction applies only to days spent in a psychiatric hospital. [65c69dd6643df39a:0-0] \n\nThe key point is that the status of the institution as of the first day of entitlement is what determines whether days are deducted. [65c69dd6643df39a:0-0] \n\nIf the institution was not participating as of the first day of entitlement, no deductions would be made for days spent there during the preceding 150 days, even if it becomes a participating hospital later. [65c69dd6643df39a:0-0] \n\nIn summary, the period during which deductions would not be made for days spent in a psychiatric hospital is the 150 days preceding the first day of entitlement, provided the institution was participating as of that first day. [65c69dd6643df39a:0-0]",
+      "latency_ms": 25498.271374992328,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5767634854771784,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "bertscore_f1": NaN,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.75,
+        "completeness": 1.0,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    }
+  ],
+  "aggregate": {
+    "grounding": 0.41157935229539866,
+    "citation_f1": 0.0,
+    "citation_precision": 0.0,
+    "citation_recall": 0.0,
+    "bertscore_f1": NaN,
+    "tool_name_match": 1.0,
+    "tool_arg_f1": 1.0,
+    "fcrs": 0.75,
+    "completeness": 1.0,
+    "citation_coverage": 0.0,
+    "tool_appropriateness": 1.0,
+    "escalation_accuracy_per_query": 1.0,
+    "latency_p50": 21423.069937503897,
+    "latency_p95": 28102.933079646027,
+    "latency_mean": 21444.231770996703,
+    "cgal_efficiency": 0.0,
+    "escalation_f1": 0.0
+  }
+}

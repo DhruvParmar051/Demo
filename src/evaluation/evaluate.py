@@ -92,7 +92,9 @@ def run_evaluation(
     pipelines: dict[str, Any] = {}
     for tag in models:
         try:
-            pipe_obj = _build_pipeline(tag, config)
+            # Always pass None so _build_pipeline uses get_config() internally
+            # and receives a proper AegisConfig object (not a raw YAML dict).
+            pipe_obj = _build_pipeline(tag, None)
             pipelines[tag] = _pipeline_callable(pipe_obj)
         except Exception as exc:
             logger.exception("Failed to build pipeline for %s: %s", tag, exc)
