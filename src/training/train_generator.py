@@ -63,7 +63,7 @@ def _gpu_profile() -> dict[str, Any]:
         except ImportError:
             pass
  
-    # torch.compile available in PyTorch >= 2.0
+  
     compile_ok = hasattr(torch, "compile") and is_ampere_plus
  
     logger.info(
@@ -227,7 +227,6 @@ def train(cfg: Any = None) -> dict[str, Any]:
         if last_checkpoint:
             logger.info("Resuming from checkpoint: %s", last_checkpoint)
  
-    # ── OPT 6 — pick fastest available optimizer ─────────────────────────────
     try:
         import apex  # noqa: F401
         optim = "adamw_apex_fused"
