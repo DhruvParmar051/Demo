@@ -32,6 +32,7 @@ _CORE_METRICS: list[str] = [
     "grounding",
     "citation_f1",
     "bertscore_f1",
+    "recall_at_20",
     "completeness",
     "citation_coverage",
     "tool_appropriateness",

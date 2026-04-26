@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -129,6 +130,20 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
     audit = AuditLogger(audit_db)
     registry = PipelineRegistry(cfg)
 
+    # Bounded LRU cache for exact-query responses (cuts latency on repeated queries).
+    _resp_cache: OrderedDict[tuple[str, str], dict] = OrderedDict()
+    _resp_cache_max: int = 512
+
+    def _cache_get(query: str, tag: str) -> dict | None:
+        key = (query.strip().lower(), tag.lower())
+        return _resp_cache.get(key)
+
+    def _cache_put(query: str, tag: str, resp: dict) -> None:
+        key = (query.strip().lower(), tag.lower())
+        _resp_cache[key] = resp
+        if len(_resp_cache) > _resp_cache_max:
+            _resp_cache.popitem(last=False)
+
     # Pre-build the default pipeline synchronously in the main thread so that
     # llama-cpp-python (GGUF backend) is never initialised from a thread-pool
     # executor. We also force _ensure_loaded() so the Llama object exists before
@@ -170,6 +185,11 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
 
     @router.post("/query")
     async def query(req: QueryRequest) -> dict[str, Any]:
+        cached = _cache_get(req.query, req.model_tag)
+        if cached is not None:
+            logger.debug("query cache hit for model=%s", req.model_tag)
+            return cached
+
         pipeline = await registry.get(req.model_tag)
         t_start = time.perf_counter()
         try:
@@ -182,7 +202,9 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
         if response.latency_ms == 0.0:
             response.latency_ms = (time.perf_counter() - t_start) * 1000.0
         await asyncio.to_thread(audit.log, response, req.model_tag, req.query)
-        return response.to_dict()
+        result = response.to_dict()
+        _cache_put(req.query, req.model_tag, result)
+        return result
 
     # ---------------- /query/baseline --------------------------------------
 
@@ -208,9 +230,8 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
         pipeline = await registry.get(req.model_tag)
         engine = getattr(pipeline, "engine", None) or pipeline
 
-        # FIX 10: Heartbeat task to prevent client timeout during long
-        # inference. Sends SSE comment lines (": heartbeat\n\n") every
-        # sse_heartbeat_interval seconds while the main generator is running.
+        # A background task emits SSE comment lines while the generator runs
+        # so the client connection stays alive during long inference passes.
         heartbeat_queue: asyncio.Queue[str | None] = asyncio.Queue()
 
         async def _heartbeat_sender() -> None:
@@ -296,6 +317,76 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
                                              req.model_tag, req.query)
 
         return EventSourceResponse(_gen(), media_type="text/event-stream")
+
+    # ---------------- /query/user_docs ------------------------------------
+
+    @router.post("/query/user_docs")
+    async def query_user_docs(
+        req: QueryRequest,
+        collection_id: str = Query(..., min_length=1, max_length=128),
+    ) -> dict[str, Any]:
+        """Answer a query using only a user-specific document collection.
+
+        The collection is created by uploading documents with the
+        ``X-Collection-ID`` header on the ``/ingest`` endpoint.  This
+        endpoint does dense-only retrieval so no BM25 index is required.
+        """
+        from src.retrieval.vector_store import ChromaVectorStore
+        from src.data.schema import Citation, RetrievalResult
+
+        try:
+            user_vs = await asyncio.to_thread(ChromaVectorStore, collection_id)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Collection error: {exc}")
+
+        try:
+            results = await asyncio.to_thread(user_vs.query, req.query, 5)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Retrieval failed: {exc}")
+
+        if not results:
+            empty = QueryResponse(
+                answer="No relevant content found in your uploaded documents.",
+                confidence=0.0,
+            )
+            return empty.to_dict()
+
+        # Reuse the already-loaded M5 generator — no extra model loading.
+        pipeline = await registry.get("m5")
+        engine = getattr(pipeline, "engine", pipeline)
+        generator = getattr(engine, "generator", None)
+        if generator is None:
+            raise HTTPException(status_code=500, detail="Generator not available")
+
+        contexts = [
+            RetrievalResult(chunk=c, score=s, rerank_score=s) for c, s in results
+        ]
+        try:
+            answer = await asyncio.to_thread(
+                generator.generate, req.query, contexts
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Generation failed: {exc}")
+
+        citations = [
+            Citation(
+                doc_id=c.doc_id,
+                chunk_id=c.chunk_id,
+                span_start=c.span_start,
+                span_end=c.span_end,
+                cited_text=c.text[:500],
+                source=c.source,
+                page_number=c.page_number,
+            )
+            for c, _ in results
+        ]
+        response = QueryResponse(
+            answer=str(answer),
+            citations=citations,
+            confidence=0.0,
+        )
+        await asyncio.to_thread(audit.log, response, req.model_tag, req.query)
+        return response.to_dict()
 
     # ---------------- /tickets --------------------------------------------
 

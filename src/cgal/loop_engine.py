@@ -14,6 +14,7 @@ import asyncio
 import logging
 import time
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Iterable
 
@@ -134,6 +135,10 @@ class CGALLoopEngine:
         self.top_k = int(self.cfg.retrieval.top_k)
         self.rerank_top_k = int(self.cfg.retrieval.rerank_top_k)
         self.enable_decomp = bool(self.cfg.cgal.enable_query_decomposition)
+
+        # Cross-request query embedding cache (bounded LRU).
+        self._emb_cache: OrderedDict[str, np.ndarray] = OrderedDict()
+        self._emb_cache_max: int = 1024
 
     # ------------------------------------------------------------------
     # Public API
@@ -341,7 +346,7 @@ class CGALLoopEngine:
 
             if conf >= self.med_conf:
                 state.chosen_tool = TOOL_ANSWER_DIRECT
-                return self._finalize_answer(
+                result = self._finalize_answer(
                     query=query,
                     refined_query=refined_query,
                     state=state,
@@ -349,6 +354,16 @@ class CGALLoopEngine:
                     run_verify=True,
                     confidence_before=prev_conf,
                 )
+                # If NLI verification fails and we have iterations remaining, retry
+                # with a refined query instead of returning a potentially ungrounded answer.
+                if result.verify_verdict == "fail" and it < self.max_iterations - 1:
+                    logger.info(
+                        "Iter %d: verify=fail; refining query and retrying.", it
+                    )
+                    refined_query = self._refine_query(query, visited_topics)
+                    last_state = state
+                    continue
+                return result
 
             if conf >= self.low_conf:
                 chosen = self._pick_mid_tier_tool(tool_probs)
@@ -405,11 +420,21 @@ class CGALLoopEngine:
         query: str,
         local_cache: dict[str, np.ndarray],
     ) -> np.ndarray:
-        """Return a cached embedding when available; otherwise encode and store."""
+        """Return a cached embedding (per-call cache first, then cross-request cache)."""
         if query in local_cache:
-            logger.debug("CGAL: using cached embedding for query (len=%d)", len(query))
+            logger.debug("CGAL: hit local embedding cache (len=%d)", len(query))
             return local_cache[query]
+        # Check cross-request cache before encoding.
+        if query in self._emb_cache:
+            logger.debug("CGAL: hit persistent embedding cache (len=%d)", len(query))
+            emb = self._emb_cache[query]
+            local_cache[query] = emb
+            return emb
         emb = self._encode_query(query)
+        # Persist in cross-request cache (LRU eviction).
+        self._emb_cache[query] = emb
+        if len(self._emb_cache) > self._emb_cache_max:
+            self._emb_cache.popitem(last=False)
         local_cache[query] = emb
         return emb
 

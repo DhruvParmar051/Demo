@@ -40,6 +40,31 @@ def _normalize_tokens(text: str) -> list[str]:
 
 
 # ----------------------------------------------------------------------
+# Retrieval recall
+# ----------------------------------------------------------------------
+
+
+def recall_at_k(
+    retrieved_ids: list[str],
+    gold_ids: list[str],
+    k: int = 20,
+) -> float:
+    """Fraction of gold chunk IDs found in the top-k retrieved chunks.
+
+    Args:
+        retrieved_ids: Ordered list of retrieved chunk IDs (ranked best-first).
+        gold_ids: Gold chunk IDs that should be retrieved.
+        k: Cutoff depth.
+
+    Returns:
+        Recall@k in [0, 1]. Returns 0.0 if ``gold_ids`` is empty.
+    """
+    if not gold_ids:
+        return 0.0
+    return len(set(retrieved_ids[:k]) & set(gold_ids)) / len(gold_ids)
+
+
+# ----------------------------------------------------------------------
 # Grounding
 # ----------------------------------------------------------------------
 

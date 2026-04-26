@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-04-25T07:54:46.024606+00:00",
+  "input_dir": "data/synthetic",
+  "seed": 42,
+  "ratios": {
+    "train": 0.7,
+    "val": 0.15,
+    "test": 0.15
+  },
+  "files": [
+    {
+      "file": "alpha_labels.jsonl",
+      "status": "ok",
+      "total": 648,
+      "counts": {
+        "train": 453,
+        "val": 97,
+        "test": 98
+      }
+    },
+    {
+      "file": "confidence_labels.jsonl",
+      "status": "ok",
+      "total": 648,
+      "counts": {
+        "train": 453,
+        "val": 97,
+        "test": 98
+      }
+    },
+    {
+      "file": "decomp_labels.jsonl",
+      "status": "ok",
+      "total": 500,
+      "counts": {
+        "train": 350,
+        "val": 75,
+        "test": 75
+      }
+    },
+    {
+      "file": "preferences.jsonl",
+      "status": "ok",
+      "total": 2794,
+      "counts": {
+        "train": 1955,
+        "val": 419,
+        "test": 420
+      }
+    },
+    {
+      "file": "qa_pairs.jsonl",
+      "status": "ok",
+      "total": 648,
+      "counts": {
+        "train": 453,
+        "val": 97,
+        "test": 98
+      }
+    }
+  ]
+}

@@ -107,6 +107,8 @@ def run_benchmark(
 
     latencies_ms: list[float] = []
     confidences: list[float] = []
+    retrieval_latencies_ms: list[float] = []
+    generation_latencies_ms: list[float] = []
 
     wall_start = time.perf_counter()
     for i, q in enumerate(queries):
@@ -131,6 +133,27 @@ def run_benchmark(
                 confidences.append(float(conf))
             except (TypeError, ValueError):
                 pass
+
+        # Extract per-component latencies from tool_calls.
+        tool_calls = getattr(resp, "tool_calls", None)
+        if tool_calls is None and isinstance(resp, dict):
+            tool_calls = resp.get("tool_calls", [])
+        if tool_calls:
+            ret_ms = sum(
+                getattr(tc, "latency_ms", 0.0) or 0.0
+                for tc in tool_calls
+                if (getattr(tc, "tool_name", None) or tc.get("tool_name", "")) == "SearchKB"
+            )
+            gen_ms = sum(
+                getattr(tc, "latency_ms", 0.0) or 0.0
+                for tc in tool_calls
+                if (getattr(tc, "tool_name", None) or tc.get("tool_name", "")) == "AnswerDirect"
+            )
+            if ret_ms > 0:
+                retrieval_latencies_ms.append(ret_ms)
+            if gen_ms > 0:
+                generation_latencies_ms.append(gen_ms)
+
     wall_elapsed = time.perf_counter() - wall_start
 
     if not latencies_ms:
@@ -151,4 +174,6 @@ def run_benchmark(
         "p99_latency_ms": _pct(99),
         "throughput_qps": len(latencies_ms) / wall_elapsed if wall_elapsed > 0 else 0.0,
         "avg_confidence": float(statistics.fmean(confidences)) if confidences else 0.0,
+        "avg_retrieval_ms": float(statistics.fmean(retrieval_latencies_ms)) if retrieval_latencies_ms else 0.0,
+        "avg_generation_ms": float(statistics.fmean(generation_latencies_ms)) if generation_latencies_ms else 0.0,
     }

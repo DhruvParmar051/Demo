@@ -5,9 +5,9 @@ Uses TRL's SFTTrainer with a custom ``compute_loss`` override that routes
 through :class:`CitationWeightedCELoss` so citation-marker tokens are
 upweighted relative to plain tokens.
 
-FIX 8: ``max_seq_length`` is now correctly read from
-``cfg.training.generator_sft.max_seq_length`` (was incorrectly referencing
-``cfg.models.generator.max_seq_length``).
+``max_seq_length`` is read from ``cfg.training.generator_sft.max_seq_length``
+(the training config), not from ``cfg.models.generator.max_seq_length``
+(the inference config).
 """
 
 from __future__ import annotations
@@ -119,12 +119,9 @@ def train(cfg: Any = None) -> dict[str, Any]:
     )
     model = get_peft_model(model, peft_cfg)
 
-    # FIX 8: Read max_seq_length from the correct training config field.
-    # Previously this incorrectly used cfg.models.generator.max_seq_length
-    # (which is the inference max length), not the training config value.
     tcfg = cfg.training.generator_sft
     max_seq = int(tcfg.max_seq_length)
-    logger.info("Generator SFT max_seq_length=%d (from training config)", max_seq)
+    logger.info("Generator SFT max_seq_length=%d", max_seq)
 
     def _tokenize(ex: dict[str, Any]) -> dict[str, Any]:
         text = ex["prompt"] + ex["response"] + tokenizer.eos_token

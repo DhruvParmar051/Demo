@@ -20,11 +20,6 @@ from tqdm import tqdm
 from src.utils.config import get_config
 from src.utils.determinism import set_seed
 
-# Configure logging to be clean and non-intrusive for TQDM
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -70,17 +65,15 @@ def _build_hard_negatives(qa: list[dict[str, Any]], k: int = 3) -> None:
     for rec in qa:
         query = rec["query"]
         gold_ids = set(rec.get("gold_chunk_ids", []))
-        # FIX 7: Request k+5 to have enough candidates after filtering gold
-        hits = idx.query(query, top_k=k + 5)
+        hits = idx.query(query, top_k=k + 5)  # over-fetch so we have enough after filtering gold
         negatives = [c.text for c, _ in hits if c.chunk_id not in gold_ids][:k]
         rec["hard_negative_texts"] = negatives
 
 
 def train(cfg: Any = None) -> dict[str, Any]:
     """Train the retriever with MNRL."""
-    # CRITICAL FIX for Mac OOM: Allow PyTorch to use all available Unified Memory
-    os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
-    
+    # Allow PyTorch MPS to use all available Unified Memory on Apple Silicon.
+    os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
     cfg = get_config()
     set_seed(42)
 

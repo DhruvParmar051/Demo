@@ -26,6 +26,7 @@ from src.evaluation.metrics import (
     decomposition_accuracy,
     escalation_f1,
     grounding_score,
+    recall_at_k,
     tool_accuracy,
 )
 
@@ -173,6 +174,14 @@ class Evaluator:
 
             row["grounding"] = grounding_score(response.answer, response.citations)
             row["citation_f1"] = citation_f1(response.citations, gold_citations)
+
+            gold_chunk_ids = item.get("gold_chunk_ids", [])
+            if gold_chunk_ids:
+                retrieved_ids = [c.chunk_id for c in response.citations]
+                row["recall_at_20"] = recall_at_k(retrieved_ids, gold_chunk_ids, k=20)
+            else:
+                row["recall_at_20"] = float("nan")
+
             if gold_answer:
                 try:
                     row["bertscore_f1"] = answer_quality(response.answer, gold_answer)
@@ -221,6 +230,9 @@ class Evaluator:
         )
         aggregate["bertscore_f1"] = self._nan_mean(
             [r["bertscore_f1"] for r in per_query]
+        )
+        aggregate["recall_at_20"] = self._nan_mean(
+            [r["recall_at_20"] for r in per_query]
         )
         aggregate["tool_name_match"] = self._nan_mean(
             [r["tool_accuracy"]["name_match"] for r in per_query]

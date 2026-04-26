@@ -1,12 +1,12 @@
-"""Training orchestrator (SFT-free, decomposer-free).
+"""Training orchestrator.
 
-Canonical order for the lean pipeline:
+Canonical component order:
 
-    retriever -> reranker -> dpo -> confidence -> alpha
+    retriever -> reranker -> generator -> dpo -> confidence -> alpha
 
-SFT (``generator``) is removed: DPO runs directly on the base generator.
-Decomposer training is removed: we use the rule-based splitter at runtime
-(``src.decomposer.splitter._heuristic_split``).
+``generator`` runs QLoRA/DoRA SFT on Qwen2.5-7B-Instruct with
+citation-weighted cross-entropy loss.  Decomposer training is omitted;
+the rule-based splitter (``src.decomposer.splitter``) is used at runtime.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 _COMPONENT_ORDER: tuple[str, ...] = (
     "retriever",
     "reranker",
+    "generator",
     "dpo",
     "confidence",
     "alpha",
@@ -38,9 +39,7 @@ def _load_trainer(component: str) -> Callable[..., dict[str, Any]]:
     elif component == "alpha":
         from src.training.train_alpha import train
     elif component in {"generator", "sft"}:
-        raise ValueError(
-            "SFT ('generator') training has been removed; DPO runs on the base model."
-        )
+        from src.training.train_generator import train
     elif component == "decomposer":
         raise ValueError(
             "Decomposer training has been removed; rule-based splitter is used at runtime."

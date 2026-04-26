@@ -7,6 +7,12 @@ Launch with:
 
 Talks to the FastAPI backend via HTTP / SSE. When the backend is down the
 sidebar shows an error and the main panel falls back to a stub response.
+
+Features:
+- Chat history with Streamlit's native chat UI (chronological, persistent).
+- User document upload: files are ingested into a session-specific collection
+  and queried in isolation via /query/user_docs (no mixing with system KB).
+- Search mode toggle: "System KB" vs "My Documents".
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ import argparse
 import json
 import os
 import sys
+import uuid
 from typing import Any
 
 import requests  # type: ignore
@@ -32,6 +39,7 @@ from demo.components.decomp_indicator import render_decomp_indicator  # noqa: E4
 from demo.components.latency_chart import render_latency_breakdown  # noqa: E402
 from demo.components.streaming_chat import render_streaming_chat  # noqa: E402
 from demo.components.verified_badge import render_verified_badge  # noqa: E402
+from demo.upload_panel import render_upload_panel  # noqa: E402
 
 
 def _get_api_url() -> str:
@@ -47,19 +55,40 @@ def _get_api_url() -> str:
 def _init_state() -> None:
     st.session_state.setdefault("history", [])
     st.session_state.setdefault("api_url", _get_api_url())
+    st.session_state.setdefault("session_id", str(uuid.uuid4()))
+    st.session_state.setdefault("user_docs_ingested", False)
 
 
-def _call_query(api: str, query: str, tag: str, stream: bool) -> dict[str, Any]:
+def _call_query(
+    api: str,
+    query: str,
+    tag: str,
+    stream: bool,
+    search_mode: str = "System KB",
+    collection_id: str | None = None,
+) -> dict[str, Any]:
     payload = {"query": query, "model_tag": tag}
     try:
+        if search_mode == "My Documents" and collection_id:
+            # Dense-only retrieval against the user's personal collection.
+            r = requests.post(
+                f"{api}/query/user_docs",
+                params={"collection_id": collection_id},
+                json=payload,
+                timeout=120,
+            )
+            r.raise_for_status()
+            return r.json()
+
         if stream:
             with requests.post(
                 f"{api}/query/stream", json=payload, stream=True, timeout=120
             ) as r:
                 r.raise_for_status()
                 container = st.empty()
-                return render_streaming_chat(r.iter_content(chunk_size=None),
-                                              container=container)
+                return render_streaming_chat(
+                    r.iter_content(chunk_size=None), container=container
+                )
         else:
             r = requests.post(f"{api}/query", json=payload, timeout=120)
             r.raise_for_status()
@@ -72,11 +101,17 @@ def main() -> None:
     st.set_page_config(page_title="AegisRAG", layout="wide")
     _init_state()
 
+    api_url = st.session_state["api_url"]
+    collection_id = f"user_{st.session_state['session_id']}"
+
+    # ------------------------------------------------------------------ Sidebar
     with st.sidebar:
         st.title("AegisRAG")
         st.session_state["api_url"] = st.text_input(
             "API URL", value=st.session_state["api_url"]
         )
+        api_url = st.session_state["api_url"]
+
         model_tag = st.selectbox(
             "Model",
             options=["m5", "m4", "m3", "m2", "m1", "b3", "b2", "b1"],
@@ -91,8 +126,10 @@ def main() -> None:
         stream = st.toggle("Stream tokens", value=True)
         st.caption("Temperature is locked to 0 for determinism.")
         st.slider("Temperature", 0.0, 1.0, 0.0, disabled=True)
+
+        # Backend health check
         try:
-            r = requests.get(f"{st.session_state['api_url']}/health", timeout=2)
+            r = requests.get(f"{api_url}/health", timeout=2)
             if r.ok:
                 st.success(f"Backend OK ({r.json().get('device', '?')})")
             else:
@@ -100,58 +137,98 @@ def main() -> None:
         except requests.RequestException as exc:
             st.warning(f"Backend unreachable: {exc}")
 
-    left, right = st.columns([2, 1])
+        # ---- Document upload (session-isolated) ---------------------------
+        st.divider()
+        ingest_result = render_upload_panel(
+            api_url,
+            collection_id=collection_id,
+            header="Upload Your Documents",
+            help_text="Uploads are kept private to your session.",
+        )
+        if ingest_result and ingest_result.get("chunks_added", 0) > 0:
+            st.session_state["user_docs_ingested"] = True
 
-    with left:
-        st.header("Ask AegisRAG")
-        query = st.text_area("Question", height=120, key="query_box")
-        go = st.button("Ask", type="primary")
-        if go and query.strip():
-            response = _call_query(
-                st.session_state["api_url"], query, model_tag, stream
-            )
-            print(f"Got response: {response}")
-            st.session_state["history"].append(
-                {"query": query, "response": response, "model_tag": model_tag,
-                 "domain": domain}
-            )
+        search_mode = st.radio(
+            "Search mode",
+            options=["System KB", "My Documents"],
+            index=0,
+            disabled=not st.session_state["user_docs_ingested"],
+            help=(
+                "'My Documents' answers only from files you uploaded this session. "
+                "Upload at least one document to enable."
+            ),
+        )
 
-        for turn in reversed(st.session_state["history"]):
+        if st.button("Clear chat history"):
+            st.session_state["history"] = []
+            st.rerun()
+
+    # ------------------------------------------------------------------ Chat UI
+
+    # Render existing turns chronologically.
+    for turn in st.session_state["history"]:
+        with st.chat_message("user"):
+            mode_label = (
+                " *(My Documents)*"
+                if turn.get("search_mode") == "My Documents"
+                else ""
+            )
+            st.markdown(f"{turn['query']}{mode_label}")
+
+        with st.chat_message("assistant"):
             resp = turn["response"]
-            st.markdown(f"**You ({turn['model_tag']}):** {turn['query']}")
-            if "error" in resp:
+            if "error" in resp and resp["error"]:
                 st.error(resp["error"])
-                continue
-            html = render_citations(resp.get("answer", ""),
-                                     resp.get("citations", []))
-            st.markdown(html, unsafe_allow_html=True)
-            render_verified_badge(resp.get("verify_verdict"))
-            render_decomp_indicator(
-                bool(resp.get("decomposed", False)),
-                list(resp.get("sub_queries", [])),
-            )
-            render_sources_panel(resp.get("citations", []))
-            st.divider()
+            else:
+                html = render_citations(
+                    resp.get("answer", ""), resp.get("citations", [])
+                )
+                st.markdown(html, unsafe_allow_html=True)
+                render_verified_badge(resp.get("verify_verdict"))
+                render_decomp_indicator(
+                    bool(resp.get("decomposed", False)),
+                    list(resp.get("sub_queries", [])),
+                )
+                with st.expander("Sources & details", expanded=False):
+                    render_sources_panel(resp.get("citations", []))
+                    render_cgal_trace(resp)
+                    render_latency_breakdown(resp)
+                    conf = resp.get("confidence", 0.0)
+                    st.metric("Confidence", f"{float(conf):.2f}")
+                    if resp.get("ticket_id"):
+                        st.warning(f"Escalated: ticket {resp['ticket_id']}")
 
-    with right:
-        if st.session_state["history"]:
-            latest = st.session_state["history"][-1]["response"]
-            if "error" not in latest:
-                render_cgal_trace(latest)
-                st.divider()
-                render_latency_breakdown(latest)
-                st.divider()
-                conf = latest.get("confidence", 0.0)
-                st.metric("Confidence", f"{float(conf):.2f}")
-                if latest.get("ticket_id"):
-                    st.warning(f"Escalated: ticket {latest['ticket_id']}")
+    # Persistent chat input — always visible at the bottom.
+    user_input = st.chat_input("Ask AegisRAG…")
+    if user_input:
+        response = _call_query(
+            api_url,
+            user_input,
+            model_tag,
+            stream,
+            search_mode=search_mode,
+            collection_id=collection_id,
+        )
+        st.session_state["history"].append(
+            {
+                "query": user_input,
+                "response": response,
+                "model_tag": model_tag,
+                "domain": domain,
+                "search_mode": search_mode,
+            }
+        )
+        st.rerun()
 
-    # Debug raw response expander
+    # Debug expander for the last response (development aid).
     if st.session_state["history"]:
-        with st.expander("Raw JSON of last response"):
+        with st.expander("Raw JSON of last response", expanded=False):
             st.code(
-                json.dumps(st.session_state["history"][-1]["response"],
-                           indent=2, default=str),
+                json.dumps(
+                    st.session_state["history"][-1]["response"],
+                    indent=2,
+                    default=str,
+                ),
                 language="json",
             )
 

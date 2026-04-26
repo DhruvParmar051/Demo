@@ -33,10 +33,8 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# FIX 2: Faster model; DeBERTa MNLI is ~3x faster than roberta-large BERTScore
 _DEFAULT_FAST_MODEL = "cross-encoder/nli-deberta-v3-small"
-# FIX 2: Batch size for scoring to avoid OOM
-_SCORE_BATCH_SIZE = 32
+_SCORE_BATCH_SIZE = 32  # NLI pairs per forward pass
 # How often (in queries) to flush labels + checkpoint to disk
 _DEFAULT_CHECKPOINT_INTERVAL = 20
 
@@ -58,9 +56,7 @@ def _query_hash(query: str) -> str:
 class ConfidenceLabelGenerator:
     """Produce soft-label confidence examples using fast NLI similarity.
 
-    FIX 2: Uses a DeBERTa MNLI cross-encoder instead of BERTScore
-    (roberta-large) for speed. Scoring is batched to avoid OOM.
-
+    Scoring uses a DeBERTa MNLI cross-encoder batched for GPU efficiency.
     Supports resumable generation: intermediate results are flushed to
     disk every ``checkpoint_interval`` queries, and a sidecar
     ``.checkpoint.json`` file tracks which queries have been scored. If
@@ -82,7 +78,7 @@ class ConfidenceLabelGenerator:
     limit : int or None
         Target number of labels.
     score_batch_size : int
-        Batch size for NLI scoring (FIX 2).
+        Number of pairs per NLI scoring batch.
     checkpoint_interval : int
         Flush labels and checkpoint to disk every N queries (default 50).
     """
@@ -119,8 +115,7 @@ class ConfidenceLabelGenerator:
             configured = int(getattr(cfg.synthetic_data, "confidence_labels", 3000))
             self.target_count = max(configured, 3000)
 
-        # FIX 2: Use fast NLI model; lazy-loaded
-        self._nli_model: Any = None
+        self._nli_model: Any = None  # lazy-loaded on first score call
 
     # ------------------------------------------------------------------
     # Checkpoint helpers
@@ -331,7 +326,7 @@ class ConfidenceLabelGenerator:
         return labels
 
     # ------------------------------------------------------------------
-    # FIX 2: Fast batched NLI scoring
+    # NLI-based similarity scoring
     # ------------------------------------------------------------------
 
     def _fast_similarity_scores(
@@ -386,7 +381,7 @@ class ConfidenceLabelGenerator:
             return self._bertscore_f1(candidates, references)
 
     def _get_nli_model(self) -> Any:
-        """Lazy-load the NLI cross-encoder (FIX 2)."""
+        """Lazy-load and cache the NLI cross-encoder."""
         if self._nli_model is not None:
             return self._nli_model
         try:
@@ -422,7 +417,6 @@ class ConfidenceLabelGenerator:
         logger.info(
             "Computing BERTScore F1 for %d pairs (fallback mode)", len(candidates)
         )
-        # FIX 2: Batch BERTScore as well to avoid OOM
         all_f1: list[float] = []
         for start in range(0, len(candidates), self.score_batch_size):
             cands_batch = list(candidates[start : start + self.score_batch_size])

@@ -28,6 +28,7 @@ def render_upload_panel(
     header: str = "Upload Evidence",
     help_text: str | None = None,
     timeout_seconds: int = 120,
+    collection_id: str | None = None,
 ) -> dict | None:
     """Render the uploader and return the API response dict on success.
 
@@ -71,9 +72,12 @@ def render_upload_panel(
     if submit and uploaded:
         files_payload = _build_multipart(uploaded)
         endpoint = api_url.rstrip("/") + "/ingest"
+        headers = {"X-Collection-ID": collection_id} if collection_id else {}
         with st.spinner(f"Indexing {len(uploaded)} file(s) ..."):
             try:
-                response = requests.post(endpoint, files=files_payload, timeout=timeout_seconds)
+                response = requests.post(
+                    endpoint, files=files_payload, headers=headers, timeout=timeout_seconds
+                )
                 response.raise_for_status()
                 data = response.json()
             except requests.RequestException as exc:

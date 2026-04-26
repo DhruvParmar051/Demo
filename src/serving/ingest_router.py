@@ -55,12 +55,15 @@ def build_ingest_router(config: Any | None = None):
     ``config`` is passed through to DocumentIngestor. When None, the ingestor
     will fall back to its own default config resolution.
     """
-    from fastapi import APIRouter, File, HTTPException, UploadFile
+    from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 
     router = APIRouter(tags=["ingest"])
 
     @router.post("/ingest", response_model=None)
-    async def ingest_files(files: List[UploadFile] = File(...)) -> dict:
+    async def ingest_files(
+        files: List[UploadFile] = File(...),
+        collection_id: str | None = Header(None, alias="X-Collection-ID"),
+    ) -> dict:
         if not files:
             raise HTTPException(status_code=400, detail="No files uploaded.")
 
@@ -101,7 +104,9 @@ def build_ingest_router(config: Any | None = None):
             # where heavy deps aren't installed yet (tests, CI).
             from src.data.ingestion import DocumentIngestor  # noqa: WPS433
 
-            ingestor = DocumentIngestor()
+            ingestor = DocumentIngestor(
+                collection_name=collection_id or "aegis_chunks"
+            )
             stats = ingestor.ingest(Path(tmp_dir))
 
             # DocumentIngestor's return shape varies slightly across versions;

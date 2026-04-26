@@ -6,8 +6,8 @@ deduplicates near-duplicate chunks via MinHash LSH, then upserts the
 survivors into :class:`ChromaVectorStore` and builds a persisted
 :class:`BM25Index`.
 
-FIX 1: Batched MinHash computation in _deduplicate() for performance.
-FIX 6: BM25 now supports appending documents instead of full rebuilds.
+MinHash objects are batch-computed in a single pass before LSH insertion
+for efficiency. BM25 supports incremental appending without full rebuilds.
 """
 
 from __future__ import annotations
@@ -57,6 +57,7 @@ class DocumentIngestor:
         num_perm: int = 128,
         domain: str = "",
         seed: int = 42,
+        collection_name: str = "aegis_chunks",
     ) -> None:
         set_seed(seed)
         self.seed = seed
@@ -64,7 +65,9 @@ class DocumentIngestor:
         cfg = get_config()
         self.cfg = cfg
 
-        self.vector_store = vector_store or ChromaVectorStore()
+        self.vector_store = vector_store or ChromaVectorStore(
+            collection_name=collection_name
+        )
         self.bm25_index = bm25_index or BM25Index()
         self.chunker = chunker or RecursiveChunker()
 
@@ -134,7 +137,6 @@ class DocumentIngestor:
 
         if deduped:
             self.vector_store.add_chunks(deduped)
-            # FIX 6: Use append instead of full rebuild when possible
             self._update_bm25_index(deduped)
             if save_bm25:
                 self.bm25_index.save(self.cfg.resolve_path(self.cfg.data.bm25_index_path))
@@ -210,15 +212,11 @@ class DocumentIngestor:
         return chunks
 
     # ------------------------------------------------------------------
-    # FIX 6: BM25 append support
+    # BM25 update
     # ------------------------------------------------------------------
 
     def _update_bm25_index(self, new_chunks: list[ChunkRecord]) -> None:
-        """Append new chunks to the BM25 index instead of full rebuild.
-
-        If the index already has documents, append only the new ones.
-        Otherwise, build from scratch.
-        """
+        """Append to the BM25 index when possible, else build from scratch."""
         if self.bm25_index.size > 0:
             logger.info(
                 "Appending %d new chunks to existing BM25 index (%d docs)",
@@ -231,7 +229,7 @@ class DocumentIngestor:
             self.bm25_index.build_index(new_chunks)
 
     # ------------------------------------------------------------------
-    # FIX 1: Batched deduplication via MinHash LSH
+    # Deduplication
     # ------------------------------------------------------------------
 
     def _deduplicate(
@@ -239,13 +237,11 @@ class DocumentIngestor:
     ) -> tuple[list[ChunkRecord], int]:
         """Remove near-duplicate chunks using datasketch MinHashLSH.
 
-        FIX 1: Computes all MinHash objects in one pass before querying
-        the LSH, eliminating repeated re-shingle overhead and reducing
-        query latency by batching insertions.
+        All MinHash objects are computed in a single pass before querying
+        the LSH to minimise repeated shingling overhead. Chunks are
+        processed in their original order so the first occurrence is kept.
 
-        Returns ``(unique_chunks, num_dupes_removed)``. Chunks are
-        processed in their original order so the first occurrence is
-        retained.
+        Returns ``(unique_chunks, num_dupes_removed)``.
         """
         if not chunks:
             return [], 0
@@ -261,9 +257,7 @@ class DocumentIngestor:
 
         lsh = MinHashLSH(threshold=self.dedup_threshold, num_perm=self.num_perm)
 
-        # FIX 1: Batch compute all MinHash objects first (avoids repeated
-        # re-shingling and removes redundant encode calls inside the loop).
-        logger.info("Computing MinHash for %d chunks (batched)...", len(chunks))
+        logger.info("Computing MinHash for %d chunks ...", len(chunks))
         minhashes: list[MinHash] = []
         for chunk in chunks:
             mh = MinHash(num_perm=self.num_perm, seed=self.seed)
@@ -271,7 +265,6 @@ class DocumentIngestor:
                 mh.update(token.encode("utf-8"))
             minhashes.append(mh)
 
-        # FIX 1: Now do a single pass over chunks + pre-computed hashes
         unique: list[ChunkRecord] = []
         dupes = 0
 

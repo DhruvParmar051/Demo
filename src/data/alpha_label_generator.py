@@ -5,10 +5,9 @@ For each query in a dev set, grid-searches alpha in [0.0, 0.1, ..., 1.0]
 and records the value that maximises recall@20 against the provided
 ``gold_chunk_ids``.
 
-FIX 4: Dense and sparse retrieval are now called ONCE per query.
-Hybrid fusion across all alpha values is performed locally using the
-cached score vectors, reducing retriever calls from N_grid per query
-to 2 per query.
+Dense and sparse retrieval are called once per query; hybrid fusion
+across all alpha values is performed locally from the cached score
+vectors, reducing retriever calls from N_grid to 2 per query.
 """
 
 from __future__ import annotations
@@ -39,9 +38,8 @@ def _min_max_normalize(scores: np.ndarray) -> np.ndarray:
 class AlphaLabelGenerator:
     """Grid-search optimal alpha per query for the alpha network.
 
-    FIX 4: Retrieves dense and sparse scores once per query, then
-    performs fusion locally for every alpha value — eliminating
-    N_grid redundant retriever round-trips per query.
+    Dense and sparse scores are fetched once per query; local fusion
+    across the full alpha grid eliminates redundant retriever round-trips.
 
     Parameters
     ----------
@@ -106,7 +104,6 @@ class AlphaLabelGenerator:
         labels: list[AlphaLabel] = []
         for qa in pool:
             gold = set(qa.gold_chunk_ids)
-            # FIX 4: Retrieve dense and sparse scores once, then fuse locally
             label = self._compute_label_fast(qa.query, gold)
             if label is not None:
                 labels.append(label)
@@ -125,7 +122,7 @@ class AlphaLabelGenerator:
         return labels
 
     # ------------------------------------------------------------------
-    # FIX 4: Single-pass retrieval with local fusion
+    # Per-query oracle computation
     # ------------------------------------------------------------------
 
     def _compute_label_fast(

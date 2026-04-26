@@ -197,5 +197,14 @@ def run_calibration(model_tag: str, config: Any | None = None) -> dict[str, floa
         "auroc": auroc,
     }
     logger.info("Calibration result for %s: %s", model_tag, result)
-    
+
+    # Persist results so they can be reviewed without re-running calibration.
+    report_dir = Path("report")
+    if config is not None:
+        report_dir = Path(getattr(getattr(config, "paths", None), "report_dir", "report"))
+    report_dir.mkdir(parents=True, exist_ok=True)
+    out_path = report_dir / f"calibration_{model_tag}.json"
+    out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    logger.info("Calibration results saved to %s", out_path)
+
     return result

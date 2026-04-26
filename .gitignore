@@ -24,7 +24,6 @@ venv/
 env/
 ENV/
 .conda/
-*.jsonl
 
 # --- Environment Variables ---
 .env
@@ -58,12 +57,12 @@ checkpoints/
 *.ckpt
 
 # --- Data (large files) ---
+# synthetic/ is small (6.9 MB) and tracked — needed to train on Colab/HPC
 data/vectordb/
 data/bm25_index.pkl
 data/audit.db
 data/raw_docs/
 data/processed/
-data/synthetic/
 
 # --- Logs ---
 logs/
