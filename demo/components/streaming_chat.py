@@ -66,7 +66,7 @@ def render_streaming_chat(
         elif etype == "error":
             final = {"error": data}
             break
-
+    print(f"Final response: {final}")
     if not final:
         final = {"answer": answer_buf, "citations": citations}
     return final

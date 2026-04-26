@@ -1,0 +1,69 @@
+{
+  "per_model": {
+    "b1": {
+      "grounding": 0.41157935229539866,
+      "citation_f1": 0.0,
+      "citation_precision": 0.0,
+      "citation_recall": 0.0,
+      "bertscore_f1": NaN,
+      "tool_name_match": 1.0,
+      "tool_arg_f1": 1.0,
+      "fcrs": 0.75,
+      "completeness": 1.0,
+      "citation_coverage": 0.0,
+      "tool_appropriateness": 1.0,
+      "escalation_accuracy_per_query": 1.0,
+      "latency_p50": 21423.069937503897,
+      "latency_p95": 28102.933079646027,
+      "latency_mean": 21444.231770996703,
+      "cgal_efficiency": 0.0,
+      "escalation_f1": 0.0
+    },
+    "b3": {
+      "grounding": 0.47610486343270564,
+      "citation_f1": 0.0,
+      "citation_precision": 0.0,
+      "citation_recall": 0.0,
+      "bertscore_f1": NaN,
+      "tool_name_match": 1.0,
+      "tool_arg_f1": 1.0,
+      "fcrs": 0.75,
+      "completeness": 1.0,
+      "citation_coverage": 0.0,
+      "tool_appropriateness": 1.0,
+      "escalation_accuracy_per_query": 1.0,
+      "latency_p50": 23018.17020800081,
+      "latency_p95": 29547.3464087001,
+      "latency_mean": 23264.189045794774,
+      "cgal_efficiency": 0.0,
+      "escalation_f1": 0.0
+    },
+    "m5": {
+      "grounding": 0.6392954432419053,
+      "citation_f1": 0.0,
+      "citation_precision": 0.0,
+      "citation_recall": 0.0,
+      "bertscore_f1": NaN,
+      "tool_name_match": 1.0,
+      "tool_arg_f1": 1.0,
+      "fcrs": 0.65,
+      "completeness": 1.0,
+      "citation_coverage": 0.0,
+      "tool_appropriateness": 0.5,
+      "escalation_accuracy_per_query": 1.0,
+      "latency_p50": 49825.05195849808,
+      "latency_p95": 77161.87254144749,
+      "latency_mean": 53163.9332959021,
+      "cgal_efficiency": 1.0,
+      "escalation_f1": 0.0
+    }
+  },
+  "bootstrap_p_values_vs_reference": {
+    "b3": 1.0,
+    "m5": 0.0
+  },
+  "significance_flag_alpha_0.05": {
+    "b3": false,
+    "m5": true
+  }
+}

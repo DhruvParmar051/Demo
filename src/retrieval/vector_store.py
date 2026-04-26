@@ -232,8 +232,6 @@ class ChromaVectorStore:
         if filters:
             query_kwargs["where"] = filters
 
-        
-
         results = self.collection.query(**query_kwargs)
 
         # Unpack Chroma results (lists of lists) ------------------------------

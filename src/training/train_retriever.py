@@ -2,10 +2,8 @@
 Fine-tune the BGE-m3 retriever with Multiple Negatives Ranking Loss.
 
 For each QA pair we form (query, positive_chunk) and BM25-sampled hard
-negatives.
-
-FIX 7: Hard negative count now correctly read from ``cfg.training.retriever.hard_negatives``
-       (defaulting to 7, not hard-coded 3).
+negatives. The hard-negative count is read from
+``cfg.training.retriever.hard_negatives`` (default 7).
 """
 
 from __future__ import annotations

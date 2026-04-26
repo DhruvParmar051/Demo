@@ -10,15 +10,14 @@ Endpoints:
     GET  /tickets           -- escalation tickets from the audit log
     GET  /metrics           -- Prometheus-format metrics
 
-FIX 10: SSE streaming now emits periodic heartbeat comments to prevent
-client-side timeout. Heartbeat interval is read from
-``cfg.serving.sse_heartbeat_interval`` (default 15 seconds).
+SSE streaming emits periodic heartbeat comments to prevent client-side
+timeout. The interval is configurable via ``cfg.serving.sse_heartbeat_interval``
+(default 15 seconds).
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from pathlib import Path
 from typing import Any
@@ -40,11 +39,12 @@ from src.utils.device import get_device_string
 from src.serving.ingest_router import build_ingest_router
 from loguru import logger
 
-# Import at module level so Pydantic v2 can resolve forward references.
+# Imported at module level so Pydantic v2 can resolve forward references in
+# request models without needing the global namespace trick.
 try:
-    from fastapi import FastAPI, HTTPException, Query, Request  # type: ignore
+    from fastapi import APIRouter, FastAPI, HTTPException, Query, Request  # type: ignore
     from fastapi.middleware.cors import CORSMiddleware  # type: ignore
-    from fastapi.responses import JSONResponse, PlainTextResponse  # type: ignore
+    from fastapi.responses import PlainTextResponse  # type: ignore
     from pydantic import BaseModel, ConfigDict, Field  # type: ignore
 
     class QueryRequest(BaseModel):
@@ -129,11 +129,10 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
     audit = AuditLogger(audit_db)
     registry = PipelineRegistry(cfg)
 
-    # Pre-build the default pipeline synchronously in the MAIN thread before
-    # uvicorn starts. llama-cpp-python (GGUF backend) segfaults when initialized
-    # from a thread-pool executor (asyncio.to_thread) on macOS.
-    # We also force _ensure_loaded() on the generator so the Llama object is
-    # created here in the main process — NOT lazily on the first request.
+    # Pre-build the default pipeline synchronously in the main thread so that
+    # llama-cpp-python (GGUF backend) is never initialised from a thread-pool
+    # executor. We also force _ensure_loaded() so the Llama object exists before
+    # uvicorn begins accepting requests.
     if model_tag:
         _tag = model_tag.lower()
         logger.info("Pre-loading pipeline '%s' in main thread ...", _tag)
@@ -150,14 +149,12 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
         except Exception as _exc:
             logger.warning("Pipeline pre-load failed (%s); will retry on first request.", _exc)
 
-    # FIX 10: Read heartbeat interval from config
     sse_heartbeat_interval: float = float(
         getattr(cfg.serving, "sse_heartbeat_interval", 15)
     )
 
-    # All API routes live on this router so they can be prefixed (e.g. /api/v1)
-    from fastapi import APIRouter as _APIRouter
-    router = _APIRouter(prefix=api_prefix)
+    # All routes are registered on this router so they share the /api/v1 prefix.
+    router = APIRouter(prefix=api_prefix)
 
     # ---------------- health ----------------------------------------------
 
@@ -217,22 +214,22 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
         heartbeat_queue: asyncio.Queue[str | None] = asyncio.Queue()
 
         async def _heartbeat_sender() -> None:
-            """Emit heartbeat SSE comments at a fixed interval."""
+            """Emit SSE comment lines at a fixed interval to keep the connection alive."""
             while True:
                 await asyncio.sleep(sse_heartbeat_interval)
-                await heartbeat_queue.put(f": heartbeat\n\n")
+                await heartbeat_queue.put(": heartbeat\n\n")
 
         async def _gen():
             t_start = time.perf_counter()
             final: QueryResponse | None = None
             verify_emitted = False
 
-            # FIX 10: Start heartbeat background task
             heartbeat_task = asyncio.create_task(_heartbeat_sender())
 
             try:
-                stream_fn = getattr(engine, "_run_streaming", None) or getattr(
-                    engine, "run_streaming", None
+                stream_fn = (
+                    getattr(engine, "_run_streaming", None)
+                    or getattr(engine, "run_streaming", None)
                 )
                 if stream_fn is not None:
                     agen = stream_fn(req.query)
@@ -243,9 +240,8 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
                         async for ev in agen:
                             yield ev
 
-                    # FIX 10: Interleave heartbeats with real events
+                    # Flush any pending heartbeats before each real event.
                     async for ev in _drain_agen():
-                        # Flush any pending heartbeats first
                         while not heartbeat_queue.empty():
                             hb = heartbeat_queue.get_nowait()
                             if hb:
@@ -268,7 +264,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
                             final_dict = data if isinstance(data, dict) else {}
                             yield format_sse(EVENT_DONE, final_dict)
                 else:
-                    # Non-streaming path: emit a heartbeat while waiting
+                    # Non-streaming fallback: poll and emit heartbeats while waiting.
                     response_task = asyncio.create_task(
                         asyncio.to_thread(pipeline.run, req.query)
                     )
@@ -287,7 +283,6 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
                 yield format_sse(EVENT_ERROR, {"message": str(exc),
                                                 "type": exc.__class__.__name__})
             finally:
-                # FIX 10: Cancel heartbeat task when streaming ends
                 heartbeat_task.cancel()
                 try:
                     await heartbeat_task

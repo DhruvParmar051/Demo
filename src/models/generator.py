@@ -27,6 +27,11 @@ from src.utils.device import get_device, get_device_string
 
 logger = logging.getLogger(__name__)
 
+# Stop sequences that prevent repetitive / out-of-role generation.
+_STOP = [
+    "<|user|>", "<|system|>", "<|context|>", "<|assistant|>",
+    "\n\nIf you need further", "\n\nPlease provide more", "\n\nIf you have any other",
+]
 
 SYSTEM_PROMPT = (
     "You are AegisRAG, a grounded document-understanding assistant. "
@@ -269,13 +274,11 @@ class Generator:
     def _choose_hf_model(self) -> str:
         model = (
             self.cpu_fallback_model if self.device_str == "cpu"
-            else self.model_name) or self.model_name
+            else self.model_name
+        ) or self.model_name
         if model is None:
-            raise ValueError("No valid model configured")
-
+            raise ValueError("No valid model configured.")
         return model
-
-       
 
     def _load_hf(self) -> None:
         try:
@@ -352,12 +355,13 @@ class Generator:
             )
         n_ctx = int(getattr(self.cfg.models.generator, "max_seq_length", 4096))
 
-        # Resolve n_gpu_layers (priority: env var > config > device-based default).
-        # MPS (Apple Silicon) crashes with -1 on many quantized GGUF models.
+        # Resolve n_gpu_layers: env var > config > device-based default.
+        # MPS (Apple Silicon) crashes with -1 on many quantised GGUF models.
         import os as _os
-        # Accept both the nested pydantic-settings form and the short legacy form.
-        _env_gpu = (_os.getenv("AEGIS_MODELS__GENERATOR__GGUF_N_GPU_LAYERS")
-                    or _os.getenv("AEGIS_GGUF_N_GPU_LAYERS"))
+        _env_gpu = (
+            _os.getenv("AEGIS_MODELS__GENERATOR__GGUF_N_GPU_LAYERS")
+            or _os.getenv("AEGIS_GGUF_N_GPU_LAYERS")
+        )
         if _env_gpu is not None:
             n_gpu_layers = int(_env_gpu)
         else:
@@ -451,9 +455,6 @@ class Generator:
         llama = self._llama
         if llama is None:
             raise RuntimeError("GGUF backend is not loaded.")
-        _STOP = ["<|user|>", "<|system|>", "<|context|>", "<|assistant|>",
-                 "\n\nIf you need further", "\n\nPlease provide more",
-                 "\n\nIf you have any other"]
         out = llama(
             prompt,
             max_tokens=max_new_tokens,
@@ -468,9 +469,6 @@ class Generator:
         llama = self._llama
         if llama is None:
             raise RuntimeError("GGUF backend is not loaded.")
-        _STOP = ["<|user|>", "<|system|>", "<|context|>", "<|assistant|>",
-                 "\n\nIf you need further", "\n\nPlease provide more",
-                 "\n\nIf you have any other"]
         for chunk in llama(
             prompt,
             max_tokens=max_new_tokens,

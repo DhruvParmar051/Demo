@@ -9,10 +9,10 @@ system described in the plan.
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-import threading
 
 from src.cgal.alpha_network import AlphaNetwork
 from src.cgal.confidence_head import ConfidenceHead

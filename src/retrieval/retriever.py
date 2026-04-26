@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import numpy as np
 import torch
-from concurrent.futures import ThreadPoolExecutor
 
 from src.data.schema import ChunkRecord
 from src.retrieval.bm25_index import BM25Index

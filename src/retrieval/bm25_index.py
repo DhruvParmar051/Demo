@@ -2,8 +2,7 @@
 AegisRAG - BM25 Sparse Retrieval Index
 
 Provides keyword-based retrieval using BM25Okapi from rank_bm25.
-
-FIX 6: Added append_chunks() method to add documents without full rebuild.
+Supports incremental document appending via :meth:`BM25Index.append_chunks`.
 """
 
 from __future__ import annotations
@@ -34,9 +33,7 @@ class BM25Index:
 
     Build with :meth:`build_index`, query with :meth:`query`, and
     persist / restore with :meth:`save` / :meth:`load`.
-
-    FIX 6: :meth:`append_chunks` adds documents incrementally without
-    discarding the existing index.
+    Use :meth:`append_chunks` to extend the index without a full rebuild.
     """
 
     def __init__(self) -> None:
@@ -69,11 +66,11 @@ class BM25Index:
         logger.info("BM25 index built with %d documents", len(self._chunks))
 
     # ------------------------------------------------------------------
-    # FIX 6: Append without full rebuild
+    # Incremental updates
     # ------------------------------------------------------------------
 
     def append_chunks(self, new_chunks: list[ChunkRecord]) -> None:
-        """Append new chunks to the existing index without full rebuild.
+        """Append new chunks without discarding the existing index.
 
         Deduplicates by chunk_id so re-ingesting the same document is safe.
         Rebuilds the underlying BM25Okapi once over the combined corpus.

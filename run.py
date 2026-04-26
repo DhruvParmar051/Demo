@@ -104,7 +104,7 @@ def cmd_generate_data(args: argparse.Namespace, cfg: dict) -> None:
 
     valid_types = {"qa", "preference", "confidence", "alpha", "decomp", "all"}
     if data_type not in valid_types:
-        logger.error(f"Invalid data type '{data_type}'. Must be one of: {valid_types}")
+        logger.error("Invalid data type '%s'. Must be one of: %s", data_type, valid_types)
         sys.exit(1)
 
     logger.info("Generating synthetic data: type=%s, output=%s", data_type, output_dir)
@@ -126,7 +126,7 @@ def cmd_train(args: argparse.Namespace, cfg: dict) -> None:
         "confidence", "alpha", "decomposer", "all",
     }
     if component not in valid_components:
-        logger.error(f"Invalid component '{component}'. Must be one of: {valid_components}")
+        logger.error("Invalid component '%s'. Must be one of: %s", component, valid_components)
         sys.exit(1)
 
     logger.info("Training component: %s", component)
@@ -143,8 +143,6 @@ def cmd_evaluate(args: argparse.Namespace, cfg: dict) -> None:
     output_dir = args.output_dir or "report"
 
     logger.info("Evaluating models: %s", models)
-    # Pass config=None so pipelines call get_config() internally and receive
-    # a proper AegisConfig object (not the raw YAML dict from load_config()).
     run_evaluation(
         models=models,
         test_dir=test_dir,
@@ -163,9 +161,6 @@ def cmd_serve(args: argparse.Namespace, cfg: dict) -> None:
     model_tag = args.model
 
     logger.info("Starting server on %s:%s with model config '%s'", host, port, model_tag)
-
-    # Pass config=None so create_app calls get_config() and receives a
-    # proper AegisConfig object (not the raw YAML dict from load_config()).
     app = create_app(model_tag=model_tag, config=None)
 
     import uvicorn
@@ -192,8 +187,6 @@ def cmd_query(args: argparse.Namespace, cfg: dict) -> None:
         sys.exit(1)
 
     logger.info("Querying model '%s': %s...", model_tag, query_text[:80])
-    # Pass None so M5Pipeline calls get_config() internally and receives a
-    # proper AegisConfig object (not the raw YAML dict from load_config()).
     result = query_model(
         model_tag=model_tag,
         query=query_text,

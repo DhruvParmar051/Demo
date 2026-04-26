@@ -4,10 +4,9 @@ AuditLogger -- SQLite-backed append-only log for every served query.
 Writes one row per ``QueryResponse`` so we can (a) replay the evaluation
 set offline and (b) expose escalation tickets via ``GET /tickets``.
 
-FIX 9: Added retention policy — old entries are automatically deleted
-after a configurable number of days (default: 30). Pruning runs on
-each log() call with a low-overhead row-count check to avoid excessive
-I/O on every request.
+Old entries are automatically pruned after a configurable number of days
+(default 30). Pruning is throttled — it runs every ``_PRUNE_EVERY_N_WRITES``
+log calls — to avoid excessive I/O per request.
 """
 
 from __future__ import annotations
@@ -24,10 +23,8 @@ from src.data.schema import QueryResponse
 
 logger = logging.getLogger(__name__)
 
-# FIX 9: Default retention period in days
-_DEFAULT_RETENTION_DAYS = 30
-# FIX 9: How often to trigger pruning (every N writes) to limit I/O overhead
-_PRUNE_EVERY_N_WRITES = 100
+_DEFAULT_RETENTION_DAYS = 30    # days before non-ticket rows are deleted
+_PRUNE_EVERY_N_WRITES = 100     # run pruning every N log() calls
 
 
 _SCHEMA = """
@@ -56,11 +53,11 @@ CREATE INDEX IF NOT EXISTS audit_timestamp_idx ON audit(timestamp);
 
 
 class AuditLogger:
-    """Thread-safe sqlite audit log with retention-based pruning.
+    """Thread-safe SQLite audit log with automatic retention pruning.
 
-    FIX 9: Rows older than ``retention_days`` are deleted automatically.
-    Pruning is batched (runs every ``_PRUNE_EVERY_N_WRITES`` writes) to
-    avoid per-request overhead.
+    Rows older than ``retention_days`` are deleted automatically.
+    Pruning is throttled (runs every ``_PRUNE_EVERY_N_WRITES`` writes) to
+    minimise per-request overhead.
     """
 
     def __init__(
@@ -72,7 +69,7 @@ class AuditLogger:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._retention_days = int(retention_days)
-        self._write_count = 0  # FIX 9: counter for throttled pruning
+        self._write_count = 0
         self._conn = sqlite3.connect(
             str(self.db_path), check_same_thread=False
         )
@@ -122,13 +119,12 @@ class AuditLogger:
             )
             self._conn.commit()
 
-            # FIX 9: Throttled pruning — run every N writes
             self._write_count += 1
             if self._write_count % _PRUNE_EVERY_N_WRITES == 0:
                 self._prune_old_entries()
 
     # ------------------------------------------------------------------
-    # FIX 9: Retention policy
+    # Retention policy
     # ------------------------------------------------------------------
 
     def _prune_old_entries(self) -> None:

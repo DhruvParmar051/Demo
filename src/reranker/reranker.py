@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 import torch
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from src.data.schema import ChunkRecord
 from src.utils.config import get_config

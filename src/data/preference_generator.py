@@ -1,4 +1,4 @@
-"""AegisRAG - Rule-based DPO Preference Generator (local, no LLM).
+"""AegisRAG - Rule-based DPO Preference Generator.
 
 Given a corpus of ``QAPair`` chosen answers, synthesises preference
 triplets (chosen > rejected) by applying one of six deterministic
@@ -8,11 +8,11 @@ corruption strategies:
   * ``hallucinated_citation`` -- swap the chunk id in a marker to a wrong id
   * ``partial_truncation``    -- truncate the answer after the first sentence
   * ``verbose_unfaithful``    -- pad answer with plausible-sounding but
-                                 unsupported claims (FIX 5: NEW TYPE)
+                                 unsupported claims
   * ``wrong_tool``            -- insert a fake tool-call directive that
-                                 contradicts the KB answer (FIX 5: NEW TYPE)
+                                 contradicts the KB answer
   * ``unsafe_tone``           -- reframe the answer with dismissive or
-                                 unhelpful phrasing (FIX 5: NEW TYPE)
+                                 unhelpful phrasing
 
 DPO training consumes the grounding-critical types (see DPO_TRAINING_TYPES);
 ``partial_truncation`` is written to disk but filtered by the trainer.
@@ -37,7 +37,6 @@ logger = logging.getLogger(__name__)
 
 _CITATION_RE = re.compile(r"\[[A-Za-z0-9_\-]+:\d+\-\d+\]")
 
-# FIX 5: All 6 rejection types now implemented
 REJECTION_TYPES: tuple[str, ...] = (
     "hallucinated_citation",
     "no_citation",
@@ -56,7 +55,7 @@ DPO_TRAINING_TYPES: tuple[str, ...] = (
     "unsafe_tone",
 )
 
-# FIX 5: Plausible-sounding filler phrases for verbose_unfaithful corruption
+# Filler phrases for the verbose_unfaithful corruption (plausible but unsupported).
 _VERBOSE_FILLERS = [
     " Additionally, some users have reported that this also depends on their account tier and region settings.",
     " It's worth noting that in certain cases this policy may vary based on subscription level and local regulations.",
@@ -65,7 +64,7 @@ _VERBOSE_FILLERS = [
     " Note that processing times can vary significantly during peak hours and holiday periods.",
 ]
 
-# FIX 5: Wrong tool directive templates
+# Templates for the wrong_tool corruption (wrong escalation directive).
 _WRONG_TOOL_TEMPLATES = [
     "Please escalate this to a human agent immediately — I cannot answer this from the knowledge base.",
     "You should contact the billing department directly; I don't have access to account-specific information.",
@@ -73,7 +72,7 @@ _WRONG_TOOL_TEMPLATES = [
     "I'll need to search external documentation for this; the internal KB does not cover this topic.",
 ]
 
-# FIX 5: Unsafe / unhelpful tone rewrites
+# Prefixes for the unsafe_tone corruption (dismissive / condescending phrasing).
 _UNSAFE_TONE_PREFIXES = [
     "That's a rather obvious question, but I'll answer anyway: ",
     "As anyone would know, ",
@@ -85,9 +84,9 @@ _UNSAFE_TONE_PREFIXES = [
 class PreferenceGenerator:
     """Build preference triplets with six rule-based corruptions.
 
-    FIX 5: Added verbose_unfaithful, wrong_tool, and unsafe_tone
-    rejection types to the existing three, completing all six types
-    defined in the DPO preference schema.
+    Each corruption strategy degrades the chosen answer along a specific
+    quality dimension (grounding, citation, tone, completeness, tool use),
+    producing the full set of six rejection types defined for DPO training.
     """
 
     def __init__(
@@ -175,7 +174,6 @@ class PreferenceGenerator:
         if rej_type == "partial_truncation":
             return self._truncate(answer)
 
-        # FIX 5: New rejection types below
         if rej_type == "verbose_unfaithful":
             return self._make_verbose_unfaithful(answer)
 
@@ -215,26 +213,20 @@ class PreferenceGenerator:
             return answer[: m.end()].strip()
         return answer[: max(1, len(answer) // 3)].strip()
 
-    # FIX 5: verbose_unfaithful — appends unsupported filler claims
     def _make_verbose_unfaithful(self, answer: str) -> str:
-        """Add plausible-sounding but unsupported padding to the answer."""
+        """Append a plausible-sounding but unsupported filler claim."""
         filler = self.rng.choice(_VERBOSE_FILLERS)
-        # Strip citations from answer body so the filler stands out more
         base = _CITATION_RE.sub("", answer).strip()
         return (base + filler).strip()
 
-    # FIX 5: wrong_tool — replace the answer with a wrong tool directive
     def _make_wrong_tool(self) -> str:
-        """Replace the KB answer with an escalation/tool directive."""
+        """Replace the KB answer with an incorrect escalation directive."""
         return self.rng.choice(_WRONG_TOOL_TEMPLATES)
 
-    # FIX 5: unsafe_tone — prepend a dismissive/condescending prefix
     def _make_unsafe_tone(self, answer: str) -> str:
-        """Prefix the answer with an unhelpful/dismissive tone marker."""
+        """Prefix the answer with a dismissive / condescending opener."""
         prefix = self.rng.choice(_UNSAFE_TONE_PREFIXES)
-        # Use the citation-stripped version for realism
         base = _CITATION_RE.sub("", answer).strip()
-        # Lowercase first letter after prefix for grammatical flow
         if base:
             base = base[0].lower() + base[1:]
         return (prefix + base).strip()
@@ -243,7 +235,7 @@ class PreferenceGenerator:
     # I/O helpers
     # ------------------------------------------------------------------
 
-    def _resolve_output(self, output_path, default_name):
+    def _resolve_output(self, output_path: Path | str | None, default_name: str) -> Path:
         if output_path is None:
             base = self.cfg.resolve_path(self.cfg.data.synthetic_dir)
             output_path = Path(base) / default_name

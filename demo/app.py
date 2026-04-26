@@ -90,7 +90,7 @@ def main() -> None:
         )
         stream = st.toggle("Stream tokens", value=True)
         st.caption("Temperature is locked to 0 for determinism.")
-        st.slider("Temperature", 0.0, 0.0, 0.0, disabled=True)
+        st.slider("Temperature", 0.0, 1.0, 0.0, disabled=True)
         try:
             r = requests.get(f"{st.session_state['api_url']}/health", timeout=2)
             if r.ok:
@@ -110,6 +110,7 @@ def main() -> None:
             response = _call_query(
                 st.session_state["api_url"], query, model_tag, stream
             )
+            print(f"Got response: {response}")
             st.session_state["history"].append(
                 {"query": query, "response": response, "model_tag": model_tag,
                  "domain": domain}

@@ -33,7 +33,6 @@ from src.data.schema import ChunkRecord, Citation, QAPair
 from src.utils.config import get_config
 from src.utils.determinism import set_seed
 
-logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -430,7 +429,6 @@ def _build_prompt(chunk: ChunkRecord, qtype: str, rng: random.Random) -> str:
         "  - BAD example: 'What is the dollar amount on line 3?'\n"
         "  - GOOD example: 'Under what income threshold does the credit phase out completely?'\n\n"
         "ANSWER:\n"
-       "ANSWER:\n"
         "  - 1 to 2 sentences ONLY (concise and precise).\n"
         "  - MUST directly answer the question using ONLY information from the passage.\n"
         "  - Do NOT add explanations, reasoning, or implications unless explicitly stated.\n"
@@ -441,10 +439,9 @@ def _build_prompt(chunk: ChunkRecord, qtype: str, rng: random.Random) -> str:
         "  - Use exact regulatory language (amounts, percentages, deadlines) from the passage.\n"
         "  - Do NOT fabricate numbers or dates not in the passage.\n"
         "  - Do NOT use bullet points or numbered lists.\n"
+        "  - Use natural, human-friendly phrasing (e.g. 'choose' not 'elect', 'before' not 'prior to').\n"
         "  - BAD example: 'The amount is 20 percent.'\n"
         "  - GOOD example: 'The coinsurance liability for DME furnished as a home health "
-        "  - Use natural, human-friendly phrasing instead of formal/legal wording.\n"   
-        "  - Prefer 'choose' instead of 'elect', 'before' instead of 'prior to'.\n"
         "service is 20 percent of the fee schedule amount. This applies only to services "
         "covered under Part B, not to hospital inpatient stays.'\n\n"
         "OUTPUT (strict JSON, no code fences, no extra text):\n"
