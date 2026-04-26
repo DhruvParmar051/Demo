@@ -68,8 +68,8 @@ def train(cfg: Any = None) -> dict[str, Any]:
             Trainer,
             TrainingArguments,
             DataCollatorForLanguageModeling,
-            get_last_checkpoint,
         )
+        from transformers.trainer_utils import get_last_checkpoint
         from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training  # type: ignore
         from datasets import Dataset  # type: ignore
     except ImportError as exc:
