@@ -53,6 +53,12 @@ def run_training(
     component: str = "all",
     config: Any | None = None,
 ) -> dict[str, dict[str, Any]]:
+    # run.py passes a plain dict (yaml.safe_load). Trainers expect the
+    # structured config object with attribute access, so normalise here.
+    if config is None or isinstance(config, dict):
+        from src.utils.config import get_config
+        config = get_config()
+
     targets = _COMPONENT_ORDER if component == "all" else (component,)
     results: dict[str, dict[str, Any]] = {}
     for name in targets:
