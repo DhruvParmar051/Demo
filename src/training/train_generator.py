@@ -107,7 +107,7 @@ def train(cfg: Any = None) -> dict[str, Any]:
     )
     model = prepare_model_for_kbit_training(model)
 
-    lcfg_yaml = cfg.lora.generator_sft
+    lcfg_yaml = cfg.lora  # flat LoRAConfig — rank/alpha/target_modules/use_dora live here
     peft_cfg = LoraConfig(
         r=int(lcfg_yaml.rank),
         lora_alpha=int(lcfg_yaml.alpha),
