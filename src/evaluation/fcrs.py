@@ -25,21 +25,10 @@ _NUMBER_RE = re.compile(r"\d")
 _PROPER_NOUN_RE = re.compile(r"\b[A-Z][a-zA-Z0-9]+\b")
 
 
-# Cached BERTScore callable
-_BERTSCORE_CACHE: dict[str, Any] = {}
-
-
+# Share the singleton BERTScorer from metrics so roberta-large loads only once.
 def _bertscore_fn() -> Any:
-    """Lazy-load ``bert_score.score``.
-
-    Returns:
-        The ``bert_score.score`` function.
-    """
-    if "score" not in _BERTSCORE_CACHE:
-        from bert_score import score as _score  # lazy import
-
-        _BERTSCORE_CACHE["score"] = _score
-    return _BERTSCORE_CACHE["score"]
+    from src.evaluation.metrics import _get_bertscorer
+    return _get_bertscorer()
 
 
 def _completeness(answer: str, key_points: list[str]) -> float:
@@ -57,12 +46,10 @@ def _completeness(answer: str, key_points: list[str]) -> float:
         return 1.0
     if not answer:
         return 0.0
-    score = _bertscore_fn()
+    scorer = _bertscore_fn()
     preds = [answer] * len(key_points)
     refs = list(key_points)
-    _, _, f1 = score(
-        preds, refs, lang="en", rescale_with_baseline=False, verbose=False
-    )
+    _, _, f1 = scorer.score(preds, refs)
     vals = [float(x.item()) for x in f1]
     if not vals:
         return 0.0

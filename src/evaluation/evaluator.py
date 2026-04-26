@@ -182,10 +182,25 @@ class Evaluator:
 
             gold_chunk_ids = item.get("gold_chunk_ids", [])
             if gold_chunk_ids:
+                # Try chunk_id first; fall back to doc_id for pipelines that
+                # only populate doc_id on citations (e.g. baselines).
                 retrieved_ids = [c.chunk_id for c in response.citations]
+                if not any(rid in gold_chunk_ids for rid in retrieved_ids):
+                    retrieved_ids = [c.doc_id for c in response.citations]
                 row["recall_at_20"] = recall_at_k(retrieved_ids, gold_chunk_ids, k=20)
             else:
-                row["recall_at_20"] = float("nan")
+                # Fall back: use doc_ids from citations against gold citation doc_ids.
+                gold_doc_ids_for_recall = [
+                    c["doc_id"] for c in gold_citations
+                    if isinstance(c, dict) and c.get("doc_id")
+                ]
+                if gold_doc_ids_for_recall:
+                    retrieved_doc_ids = [c.doc_id for c in response.citations]
+                    row["recall_at_20"] = recall_at_k(
+                        retrieved_doc_ids, gold_doc_ids_for_recall, k=20
+                    )
+                else:
+                    row["recall_at_20"] = float("nan")
 
             if gold_answer:
                 try:

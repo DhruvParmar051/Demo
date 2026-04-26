@@ -154,17 +154,23 @@ def citation_f1(
     for p in pred:
         best_idx = -1
         best_overlap = 0.0
+        pred_degenerate = p.span_start >= p.span_end
         for g_idx, g in enumerate(gold):
             if g_idx in matched_gold:
                 continue
             if g.get("doc_id") != p.doc_id:
                 continue
-            ov = _span_overlap(
-                p.span_start,
-                p.span_end,
-                int(g.get("span_start", 0)),
-                int(g.get("span_end", 0)),
-            )
+            if pred_degenerate:
+                # Predicted span is degenerate (e.g. 0-0 from inline markers);
+                # doc_id match is sufficient — treat as full overlap.
+                ov = 1.0
+            else:
+                ov = _span_overlap(
+                    p.span_start,
+                    p.span_end,
+                    int(g.get("span_start", 0)),
+                    int(g.get("span_end", 0)),
+                )
             if ov > best_overlap:
                 best_overlap = ov
                 best_idx = g_idx
@@ -190,17 +196,19 @@ def citation_f1(
 _BERTSCORE_CACHE: dict[str, Any] = {}
 
 
-def _bertscore_fn() -> Any:
-    """Lazy-load ``bert_score.score`` and cache the callable.
-
-    Returns:
-        The ``bert_score.score`` function.
-    """
-    if "score" not in _BERTSCORE_CACHE:
-        from bert_score import score as _score  # lazy import
-
-        _BERTSCORE_CACHE["score"] = _score
-    return _BERTSCORE_CACHE["score"]
+def _get_bertscorer() -> Any:
+    """Return a cached BERTScorer instance (roberta-large loads once per process)."""
+    if "scorer" not in _BERTSCORE_CACHE:
+        from bert_score import BERTScorer
+        import inspect as _inspect
+        import logging
+        logging.getLogger("bert_score").setLevel(logging.ERROR)
+        _sig = _inspect.signature(BERTScorer.__init__)
+        _kwargs: dict[str, Any] = {"lang": "en", "rescale_with_baseline": False}
+        if "verbose" in _sig.parameters:
+            _kwargs["verbose"] = False
+        _BERTSCORE_CACHE["scorer"] = BERTScorer(**_kwargs)
+    return _BERTSCORE_CACHE["scorer"]
 
 
 def answer_quality(pred: str, gold: str) -> float:
@@ -215,12 +223,10 @@ def answer_quality(pred: str, gold: str) -> float:
     """
     if not pred or not gold:
         return 0.0
-    score = _bertscore_fn()
-    _, _, f1 = score(
+    scorer = _get_bertscorer()
+    _, _, f1 = scorer.score(
         [pred],
         [gold],
-        lang="en",
-        rescale_with_baseline=False,
         verbose=False,
     )
     return float(f1[0].item())
