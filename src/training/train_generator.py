@@ -68,6 +68,7 @@ def train(cfg: Any = None) -> dict[str, Any]:
             Trainer,
             TrainingArguments,
             DataCollatorForLanguageModeling,
+            get_last_checkpoint,
         )
         from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training  # type: ignore
         from datasets import Dataset  # type: ignore
@@ -138,17 +139,62 @@ def train(cfg: Any = None) -> dict[str, Any]:
 
     ds = ds.map(_tokenize, remove_columns=["prompt", "response"])
 
+    output_dir = str(Path(cfg.checkpoints.generator_sft))
+
+    # Detect any existing checkpoint so we can resume automatically.
+    last_checkpoint = None
+    if Path(output_dir).exists():
+        last_checkpoint = get_last_checkpoint(output_dir)
+        if last_checkpoint:
+            logger.info("Resuming SFT from checkpoint: %s", last_checkpoint)
+        else:
+            logger.info("No checkpoint found in %s; starting from scratch.", output_dir)
+
+    # Auto-scale batch size and sequence length to available VRAM.
+    # T4 (15 GB) needs batch=1; A100 (40/80 GB) can run batch=4.
+    import os
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
+    total_vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024 ** 3
+    if total_vram_gb < 20:
+        # Small GPU (T4/V100-16G): batch=1, grad_accum=32, seq=1024
+        micro_batch = 1
+        grad_accum = 32
+        max_seq = min(int(tcfg.max_seq_length), 1024)
+        logger.info(
+            "Small GPU (%.1f GB): batch=1, grad_accum=32, max_seq=%d", total_vram_gb, max_seq
+        )
+    else:
+        # Large GPU (A100/H100): use config values as-is
+        micro_batch = int(tcfg.batch_size)
+        grad_accum = int(tcfg.gradient_accumulation_steps)
+        max_seq = int(tcfg.max_seq_length)
+        logger.info(
+            "Large GPU (%.1f GB): batch=%d, grad_accum=%d, max_seq=%d",
+            total_vram_gb, micro_batch, grad_accum, max_seq,
+        )
+
+    # bf16 is only efficient on Ampere+ (A100/H100); T4 uses fp16.
+    use_bf16 = torch.cuda.is_bf16_supported()
+
     args = TrainingArguments(
-        output_dir=str(Path(cfg.checkpoints.generator_sft)),
+        output_dir=output_dir,
         num_train_epochs=int(tcfg.num_epochs),
-        per_device_train_batch_size=int(tcfg.batch_size),
-        gradient_accumulation_steps=int(tcfg.gradient_accumulation_steps),
+        per_device_train_batch_size=micro_batch,
+        gradient_accumulation_steps=grad_accum,
         learning_rate=float(tcfg.learning_rate),
         warmup_ratio=float(tcfg.warmup_ratio),
         lr_scheduler_type="cosine",
         logging_steps=20,
-        save_strategy="epoch",
-        bf16=True,
+        # Save every 50 steps so there's always a recent checkpoint to resume from.
+        save_strategy="steps",
+        save_steps=50,
+        save_total_limit=3,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        optim="paged_adamw_8bit",
+        bf16=use_bf16,
+        fp16=not use_bf16,
         seed=42,
         report_to=[],
     )
@@ -174,8 +220,8 @@ def train(cfg: Any = None) -> dict[str, Any]:
         data_collator=collator,
         tokenizer=tokenizer,
     )
-    trainer.train()
-    trainer.save_model(str(Path(cfg.checkpoints.generator_sft)))
+    trainer.train(resume_from_checkpoint=last_checkpoint)
+    trainer.save_model(output_dir)
     logger.info("Saved SFT adapter to %s", cfg.checkpoints.generator_sft)
     return {"status": "ok", "output_dir": str(cfg.checkpoints.generator_sft)}
 
