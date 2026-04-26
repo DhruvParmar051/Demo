@@ -46,10 +46,11 @@ REJECTION_TYPES: tuple[str, ...] = (
     "unsafe_tone",
 )
 
-# Types DPO actually trains on (the trainer filters to this set).
+# Types DPO trains on — all 6 rejection types for full preference coverage.
 DPO_TRAINING_TYPES: tuple[str, ...] = (
     "hallucinated_citation",
     "no_citation",
+    "partial_truncation",
     "verbose_unfaithful",
     "wrong_tool",
     "unsafe_tone",

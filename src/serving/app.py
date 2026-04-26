@@ -419,6 +419,40 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
             lines.append(f'aegisrag_queries_by_tag{{tag="{tag}"}} {n}')
         return PlainTextResponse("\n".join(lines) + "\n")
 
+    # ---------------- session collection cleanup --------------------------
+    # User-upload collections accumulate in ChromaDB indefinitely.
+    # Purge collections prefixed "user_" that have not been accessed in
+    # SESSION_TTL_HOURS hours to prevent unbounded growth.
+    SESSION_TTL_HOURS: int = 2
+
+    @router.delete("/sessions/{collection_id}")
+    async def delete_session(collection_id: str) -> dict[str, Any]:
+        """Explicitly delete a user session's ChromaDB collection."""
+        if not collection_id.startswith("user_"):
+            raise HTTPException(status_code=400, detail="Only user_ collections may be deleted.")
+        try:
+            from src.retrieval.vector_store import ChromaVectorStore
+            ChromaVectorStore.delete_collection(collection_id)
+            return {"status": "deleted", "collection_id": collection_id}
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+    @app.on_event("startup")
+    async def _start_session_cleanup() -> None:
+        """Background task: purge stale user collections every hour."""
+        async def _cleanup_loop() -> None:
+            while True:
+                await asyncio.sleep(SESSION_TTL_HOURS * 3600)
+                try:
+                    from src.retrieval.vector_store import ChromaVectorStore
+                    ChromaVectorStore.purge_stale_user_collections(
+                        max_age_hours=SESSION_TTL_HOURS
+                    )
+                    logger.info("Session collection cleanup completed.")
+                except Exception as exc:
+                    logger.warning("Session cleanup failed: %s", exc)
+        asyncio.create_task(_cleanup_loop())
+
     # ---------------- shutdown hook ---------------------------------------
 
     @app.on_event("shutdown")

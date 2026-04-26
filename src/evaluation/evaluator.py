@@ -157,8 +157,13 @@ class Evaluator:
                 logger.exception("Pipeline failed on query %d: %s", idx, exc)
                 response = QueryResponse(answer="", model_tag=model_tag)
 
-            gold_answer = item.get("gold_answer", "")
-            gold_citations = item.get("gold_citations", [])
+            # Field-name normalisation: test set uses "answer_with_citations"
+            # and "citations"; fall back to legacy "gold_answer"/"gold_citations".
+            raw_gold_answer = item.get("gold_answer") or item.get("answer_with_citations", "")
+            # Strip inline citation markers [hex:start-end] before scoring.
+            import re as _re
+            gold_answer = _re.sub(r"\[[0-9a-f]{8,}:\d+-\d+\]", "", raw_gold_answer).strip()
+            gold_citations = item.get("citations", item.get("gold_citations", []))
             needed_tool = item.get("needed_tool")
             gold_escalate = bool(item.get("should_escalate", False))
 
@@ -196,8 +201,21 @@ class Evaluator:
             else:
                 row["tool_accuracy"] = {"name_match": 1.0, "arg_f1": 1.0}
 
+            # Enrich gold dict with fields FCRS needs but test set omits.
+            gold_doc_ids = [
+                c["doc_id"] for c in gold_citations
+                if isinstance(c, dict) and c.get("doc_id")
+            ]
+            # Build key_points from gold answer sentences (strip citation markers).
+            gold_sentences = [
+                s.strip() for s in _re.split(r"(?<=[.!?])\s+", gold_answer) if s.strip()
+            ]
+            fcrs_gold = dict(item)
+            fcrs_gold.setdefault("doc_ids", gold_doc_ids)
+            fcrs_gold.setdefault("key_points", gold_sentences)
+
             try:
-                row["fcrs"] = compute_fcrs(response, item)
+                row["fcrs"] = compute_fcrs(response, fcrs_gold)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("FCRS failed on query %d: %s", idx, exc)
                 row["fcrs"] = {

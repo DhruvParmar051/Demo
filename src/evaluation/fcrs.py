@@ -138,8 +138,10 @@ def _tool_appropriateness(
         a needed tool was missing or the wrong tool was used.
     """
     used_tools = {tc.tool_name for tc in response.tool_calls}
-    # Filter out trivial direct-answer sentinels from the "real" tool set.
-    real_tools = used_tools - {"AnswerDirect"}
+    # CGAL-internal operations are not "external" tool calls and must not
+    # penalise tool_appropriateness when no external tool was required.
+    _INTERNAL = {"AnswerDirect", "AnswerVerify", "SearchKB", "GetPolicy"}
+    real_tools = used_tools - _INTERNAL
 
     if not needed_tool:
         # No tool required.

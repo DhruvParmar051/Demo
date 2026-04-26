@@ -139,13 +139,14 @@ def cmd_evaluate(args: argparse.Namespace, cfg: dict) -> None:
     from src.evaluation.evaluate import run_evaluation
 
     models = [m.strip() for m in args.models.split(",")]
-    test_dir = args.test_dir or "data/test"
+    # --test-file takes priority over --test-dir
+    test_path = getattr(args, "test_file", None) or args.test_dir or "data/test"
     output_dir = args.output_dir or "report"
 
     logger.info("Evaluating models: %s", models)
     run_evaluation(
         models=models,
-        test_dir=test_dir,
+        test_dir=test_path,
         output_dir=output_dir,
         config=None,
     )
@@ -313,6 +314,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval = subparsers.add_parser("evaluate", help="Evaluate model configurations")
     p_eval.add_argument("--models", type=str, required=True, help="Comma-separated model tags (e.g., b1,m1,m5)")
     p_eval.add_argument("--test-dir", type=str, default=None, help="Directory with test data")
+    p_eval.add_argument("--test-file", type=str, default=None, help="Direct path to a specific test JSONL file (overrides --test-dir)")
     p_eval.add_argument("--output-dir", type=str, default=None, help="Directory for evaluation reports")
 
     # --- serve ---

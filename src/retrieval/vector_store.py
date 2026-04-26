@@ -67,10 +67,14 @@ class ChromaVectorStore:
         )
 
         # ----- ChromaDB client ------------------------------------------------
+        import time as _time
         self.client = chromadb.PersistentClient(path=persist_directory)
+        _col_meta: dict[str, Any] = {"hnsw:space": "cosine"}
+        if collection_name.startswith("user_"):
+            _col_meta["created_at"] = _time.time()
         self.collection = self.client.get_or_create_collection(
             name=collection_name,
-            metadata={"hnsw:space": "cosine"},
+            metadata=_col_meta,
         )
         logger.info(
             "ChromaDB collection '%s' ready (%d documents)",
@@ -274,15 +278,54 @@ class ChromaVectorStore:
 
         return output
 
-    def delete_collection(self) -> None:
-        """Delete the entire collection from ChromaDB."""
+    def drop(self) -> None:
+        """Delete this instance's collection from ChromaDB."""
         self.client.delete_collection(self.collection_name)
         logger.info("Deleted collection '%s'", self.collection_name)
-        # Recreate so the object stays usable
         self.collection = self.client.get_or_create_collection(
             name=self.collection_name,
             metadata={"hnsw:space": "cosine"},
         )
+
+    @classmethod
+    def delete_collection(cls, collection_name: str, persist_directory: str | None = None) -> None:
+        """Class-level helper: delete a named collection without loading embeddings."""
+        cfg = get_config()
+        path = persist_directory or cfg.data.vector_db_path
+        client = chromadb.PersistentClient(path=path)
+        try:
+            client.delete_collection(collection_name)
+            logger.info("Deleted collection '%s'", collection_name)
+        except Exception as exc:
+            logger.warning("Could not delete collection '%s': %s", collection_name, exc)
+
+    @classmethod
+    def purge_stale_user_collections(
+        cls,
+        max_age_hours: int = 2,
+        persist_directory: str | None = None,
+    ) -> list[str]:
+        """Delete user_ collections older than max_age_hours. Returns deleted names."""
+        import time
+
+        cfg = get_config()
+        path = persist_directory or cfg.data.vector_db_path
+        client = chromadb.PersistentClient(path=path)
+        cutoff = time.time() - max_age_hours * 3600
+        deleted: list[str] = []
+        for col in client.list_collections():
+            if not col.name.startswith("user_"):
+                continue
+            meta = col.metadata or {}
+            created_at = float(meta.get("created_at", cutoff + 1))
+            if created_at < cutoff:
+                try:
+                    client.delete_collection(col.name)
+                    deleted.append(col.name)
+                    logger.info("Purged stale session collection '%s'", col.name)
+                except Exception as exc:
+                    logger.warning("Failed to purge '%s': %s", col.name, exc)
+        return deleted
 
     def get_collection_stats(self) -> dict[str, Any]:
         """Return basic statistics about the collection."""
