@@ -293,21 +293,30 @@ class M5Pipeline:
         response = self.engine.run(query, stream=stream, history=history)
         if isinstance(response, QueryResponse):
             response.model_tag = self.model_tag
+            # When CGAL is disabled the confidence_head is a stub that outputs a
+            # hard-coded constant (not a calibrated score).  Overwrite with NaN so
+            # the evaluator does not compare it against real ConfidenceHead outputs.
+            if not self.flags.cgal:
+                response.confidence = _StubConfidenceHead.PUBLIC_CONFIDENCE
         return response
 
 
 class _StubConfidenceHead:
-    """No-op confidence head returning a constant high score.
+    """No-op confidence head for pipelines where CGAL is disabled (M1).
 
-    Used when ``cgal`` flag is False (baseline M1). Forces the loop engine
-    to take the direct-answer path on iteration 0.
+    Forces the loop engine to take the direct-answer path on iteration 0 by
+    returning a high internal score.  The public-facing ``confidence`` field
+    is set to NaN to signal "not applicable" — it is not a calibrated score
+    and must not be compared against real ConfidenceHead outputs.
     """
 
-    def __init__(self, high_conf: float = 1.0) -> None:
-        self.high_conf = high_conf
+    # Internal threshold value that satisfies the CGAL loop's confidence gate.
+    _INTERNAL_HIGH = 1.0
+    # Public-facing confidence stored in QueryResponse — NaN signals N/A.
+    PUBLIC_CONFIDENCE = float("nan")
 
     def eval(self) -> None:
         return
 
     def score(self, query_emb: Any, evidence_embs: Any) -> tuple[float, list[float]]:
-        return self.high_conf, [1.0, 0.0, 0.0, 0.0]
+        return self._INTERNAL_HIGH, [1.0, 0.0, 0.0, 0.0]

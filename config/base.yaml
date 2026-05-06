@@ -16,12 +16,12 @@ models:
 
   reranker:
     name: "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    max_seq_length: 8192
+    max_seq_length: 512   # MiniLM-L-6 hard limit; 8192 was wrong and wasted padding
     max_query_length: 128
 
   generator:
     name: "Qwen/Qwen2.5-7B-Instruct"
-    max_new_tokens: 512
+    max_new_tokens: 400   # enough for 5-6 sentence answers without excessive latency
     temperature: 0.3
     top_p: 0.9
     top_k: 50
@@ -44,7 +44,7 @@ models:
 # Retrieval Settings
 # ---------------------------------------------------------------------------
 retrieval:
-  top_k: 20
+  top_k: 10          # was 20; halves reranker work with negligible recall drop
   rerank_top_k: 5
   chunk_size: 256
   chunk_overlap: 96
@@ -62,7 +62,7 @@ retrieval:
 # CGAL (Confidence-Gated Action Loop) Settings
 # ---------------------------------------------------------------------------
 cgal:
-  max_iterations: 3
+  max_iterations: 2   # was 3; 3rd iteration almost never improves quality but triples worst-case latency
   high_confidence: 0.35   # head outputs 0.24-0.34; above this = answer without verify
   medium_confidence: 0.22  # above this = answer with verify; covers full observed range
   low_confidence: 0.10     # below this = escalate immediately; else retry

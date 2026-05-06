@@ -41,8 +41,12 @@ logger = logging.getLogger(__name__)
 def _load_test_set(path: Path) -> list[dict[str, Any]]:
     """Load a test set from JSON (list) or JSONL.
 
+    If ``path`` is a directory, automatically looks for ``qa_pairs.jsonl``
+    inside it (the canonical AegisRAG test-set filename).
+
     Args:
-        path: Path to a ``.json`` or ``.jsonl`` file.
+        path: Path to a ``.json`` / ``.jsonl`` file, or a directory
+            containing ``qa_pairs.jsonl``.
 
     Returns:
         List of gold-annotation dicts. Each dict is expected to contain
@@ -50,6 +54,15 @@ def _load_test_set(path: Path) -> list[dict[str, Any]]:
         functions (e.g. ``key_points``, ``needed_tool`` for FCRS).
     """
     path = Path(path)
+    if path.is_dir():
+        candidate = path / "qa_pairs.jsonl"
+        if not candidate.exists():
+            raise FileNotFoundError(
+                f"test_set_path is a directory but {candidate} does not exist. "
+                "Pass the explicit file path instead."
+            )
+        path = candidate
+        logger.warning("test_set_path was a directory; using %s", path)
     with open(path, "r", encoding="utf-8") as fh:
         first = fh.read(1)
         fh.seek(0)

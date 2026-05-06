@@ -128,7 +128,8 @@ export function useSSEChat(): UseSSEChatReturn {
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
+          const normalized = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+          const lines = normalized.split("\n");
           buffer = lines.pop() ?? "";
 
           let eventType = "";

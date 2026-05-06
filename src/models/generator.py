@@ -35,10 +35,10 @@ _STOP = [
 
 SYSTEM_PROMPT = (
     "You are AegisRAG, a grounded document-understanding assistant. "
-    "Every factual claim you make must be immediately followed by a citation "
-    "of the form [doc_id:start-end] pointing to the supplied context. "
-    "If the context is insufficient to answer, say so explicitly and suggest "
-    "escalation. Do not fabricate facts, tool calls, or citations."
+    "Answer the user's question using only the provided context sources. "
+    "Write a thorough response of 5 to 6 sentences, covering the key details and explaining the concept clearly. "
+    "Do not include reference markers, IDs, or bracket codes in your answer. "
+    "If the context is insufficient to answer, say so explicitly."
 )
 
 _CITATION_RE = re.compile(r"\[([^\]:]+):(\d+)-(\d+)\]")
@@ -129,6 +129,10 @@ class Generator:
         self._model = None
         self._tokenizer = None
         self._llama = None  # for GGUF
+        # Serialize all llama-cpp calls to prevent concurrent C++ context access.
+        # llama-cpp-python's internal thread pool is not reentrant and will
+        # segfault on macOS when called from multiple Python threads simultaneously.
+        self._llama_lock = threading.Lock()
 
         if warmup:
             self._ensure_loaded()
@@ -162,8 +166,10 @@ class Generator:
         self._ensure_loaded()
         tokens = max_new_tokens if max_new_tokens is not None else int(self._generation_kwargs["max_new_tokens"])
         if self.backend == "gguf":
-            return self._generate_gguf(full_prompt, tokens, temperature)
-        return self._generate_hf(full_prompt, tokens, temperature)
+            raw = self._generate_gguf(full_prompt, tokens, temperature)
+        else:
+            raw = self._generate_hf(full_prompt, tokens, temperature)
+        return _CITATION_RE.sub("", raw).strip()
 
     def stream(
         self,
@@ -269,7 +275,7 @@ class Generator:
                 span_end = getattr(chunk, "span_end", span_start + len(getattr(chunk, "text", "")))
                 text = getattr(chunk, "text", "") or getattr(chunk, "cited_text", "")
                 ctx_blocks.append(
-                    f"[{doc_id}:{span_start}-{span_end}] {text}"
+                    f"Source {i + 1}:\n{text}"
                 )
         context_str = "\n\n".join(ctx_blocks) if ctx_blocks else "(no context)"
         q = query or ""
@@ -410,14 +416,28 @@ class Generator:
             else:
                 n_gpu_layers = 0
 
+        import os as _os_cpu
+        # Use half the physical cores for inference — leaves headroom for the
+        # retrieval/reranker threads.  The segfault was caused by stream=True
+        # (fixed by generate-then-yield), NOT by multi-threading, so it's safe
+        # to restore parallelism here.
+        n_threads = max(1, (_os_cpu.cpu_count() or 4) // 2)
+        n_batch = 512  # tokens processed in parallel during prompt ingestion
+
         self._llama = Llama(
             model_path=str(self.gguf_path),
             n_ctx=n_ctx,
             n_gpu_layers=n_gpu_layers,
+            n_threads=n_threads,
+            n_batch=n_batch,
             verbose=False,
             seed=42,
+            use_mlock=False,  # prevents semaphore leak on macOS at shutdown
         )
-        logger.info("GGUF loaded: n_gpu_layers=%d ctx=%d", n_gpu_layers, n_ctx)
+        logger.info(
+            "GGUF loaded: n_gpu_layers=%d ctx=%d n_threads=%d n_batch=%d",
+            n_gpu_layers, n_ctx, n_threads, n_batch,
+        )
 
     # ------------------------------------------------------------------
     # HF generation / streaming
@@ -492,29 +512,22 @@ class Generator:
         llama = self._llama
         if llama is None:
             raise RuntimeError("GGUF backend is not loaded.")
-        out = llama(
-            prompt,
-            max_tokens=max_new_tokens,
-            temperature=temperature,
-            top_p=1.0,
-            echo=False,
-            stop=_STOP,
-        )
+        with self._llama_lock:
+            out = llama(
+                prompt,
+                max_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=1.0,
+                echo=False,
+                stop=_STOP,
+            )
         return out["choices"][0]["text"].strip()
 
     def _stream_gguf(self, prompt: str, max_new_tokens: int) -> Iterator[str]:
-        llama = self._llama
-        if llama is None:
-            raise RuntimeError("GGUF backend is not loaded.")
-        for chunk in llama(
-            prompt,
-            max_tokens=max_new_tokens,
-            temperature=0.0,
-            top_p=1.0,
-            echo=False,
-            stream=True,
-            stop=_STOP,
-        ):
-            piece = chunk["choices"][0]["text"]
-            if piece:
-                yield piece
+        # llama-cpp-python's native stream=True iterator is not safe to use
+        # from Python's async runtime on macOS: the C++ cleanup crashes when
+        # the generator is closed before exhaustion (client disconnect, etc.).
+        # Generate fully under the lock, then yield word-by-word from Python.
+        full_text = self._generate_gguf(prompt, max_new_tokens, temperature=0.0)
+        for word in full_text.split(" "):
+            yield word + " "

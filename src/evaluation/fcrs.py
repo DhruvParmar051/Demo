@@ -85,7 +85,9 @@ def _citation_coverage(
     """Fraction of factual sentences with a valid supporting citation.
 
     A sentence is "covered" if at least one of ``response.citations`` has
-    a ``doc_id`` present in ``gold_doc_ids``.
+    a ``doc_id`` present in ``gold_doc_ids``.  Coverage is computed
+    per-sentence (not globally) so an answer that hallucinates most of its
+    content is not rewarded for having one correctly-cited sentence.
 
     Args:
         answer: Predicted answer string.
@@ -94,7 +96,7 @@ def _citation_coverage(
 
     Returns:
         Coverage fraction in [0, 1]. Returns 1.0 if no factual sentences
-        are detected.
+        are detected; 0.0 if the answer is empty.
     """
     if not answer:
         return 0.0
@@ -102,11 +104,38 @@ def _citation_coverage(
     factual = [s for s in sentences if _is_factual_sentence(s)]
     if not factual:
         return 1.0
+
     pred_doc_ids = {c.doc_id for c in response.citations}
-    valid_citation = bool(pred_doc_ids & gold_doc_ids)
-    # All factual sentences share the same citation pool; either the
-    # response has a valid citation or it does not.
-    return 1.0 if valid_citation else 0.0
+    has_valid = bool(pred_doc_ids & gold_doc_ids)
+
+    # Per-sentence coverage: a sentence is covered when the response has at
+    # least one valid-doc citation whose cited_text overlaps the sentence
+    # (token-level Jaccard > 0), falling back to the coarser "any valid
+    # citation exists" signal when cited_text is absent.
+    valid_citations = [c for c in response.citations if c.doc_id in gold_doc_ids]
+    if not valid_citations:
+        return 0.0
+
+    def _tokens(text: str) -> set[str]:
+        return set(re.findall(r"[a-z0-9]+", text.lower())) if text else set()
+
+    covered = 0
+    for sent in factual:
+        sent_tokens = _tokens(sent)
+        if not sent_tokens:
+            covered += 1
+            continue
+        for cit in valid_citations:
+            cited_tokens = _tokens(cit.cited_text or "")
+            if not cited_tokens:
+                # cited_text absent — fall back to presence of any valid citation
+                covered += 1
+                break
+            if sent_tokens & cited_tokens:
+                covered += 1
+                break
+
+    return covered / len(factual)
 
 
 def _tool_appropriateness(
@@ -184,12 +213,31 @@ def compute_fcrs(response: QueryResponse, gold: dict[str, Any]) -> dict[str, flo
     tool_appropriateness = _tool_appropriateness(response, needed_tool)
     escalation_accuracy = _escalation_accuracy(response, should_escalate)
 
-    fcrs = (
-        0.35 * completeness
-        + 0.25 * citation_coverage
-        + 0.20 * tool_appropriateness
-        + 0.20 * escalation_accuracy
-    )
+    # Components are only meaningful when the gold annotation supplies the
+    # corresponding label.  When a component is not evaluable (no needed_tool
+    # in gold, or should_escalate is always False for the whole test set) it
+    # inflates FCRS by a guaranteed 1.0 * weight, which hides real differences.
+    # Mark such components as None and renormalize over the active weights.
+    tool_evaluable = needed_tool is not None
+    # escalation is evaluable only when the gold label is True (predicting
+    # "no escalation" on a non-escalation query is always correct and tells
+    # us nothing about model quality).
+    escalation_evaluable = bool(gold.get("should_escalate", False))
+
+    weights: dict[str, float] = {"completeness": 0.35, "citation_coverage": 0.25}
+    scores: dict[str, float] = {
+        "completeness": completeness,
+        "citation_coverage": citation_coverage,
+    }
+    if tool_evaluable:
+        weights["tool_appropriateness"] = 0.20
+        scores["tool_appropriateness"] = tool_appropriateness
+    if escalation_evaluable:
+        weights["escalation_accuracy"] = 0.20
+        scores["escalation_accuracy"] = escalation_accuracy
+
+    total_weight = sum(weights.values())
+    fcrs = sum(scores[k] * w for k, w in weights.items()) / total_weight
 
     return {
         "fcrs": float(fcrs),

@@ -69,7 +69,7 @@ def _free_pipeline(pipeline) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--test-dir", default="data/test")
+    parser.add_argument("--test-dir", default="data/test/qa_pairs.jsonl")
     parser.add_argument("--output-dir", default="report")
     parser.add_argument("--models", default=",".join(_TAGS))
     args = parser.parse_args()
@@ -82,6 +82,7 @@ def main() -> None:
 
     # Evaluate one model at a time to avoid holding all weights in memory.
     aggregate_results: dict[str, dict] = {}
+    _seen_gguf_paths: dict[str, str] = {}  # gguf_path -> first tag that used it
     for tag in tags:
         logging.info("=== Loading model: %s ===", tag)
         try:
@@ -93,6 +94,24 @@ def main() -> None:
         try:
             res = evaluator.evaluate(tag, pipeline)
             aggregate_results[tag] = res["aggregate"]
+            # Record which checkpoint was actually loaded so collapsed-GGUF
+            # runs are detectable in the output JSON.
+            gguf_path = getattr(getattr(pipeline, "generator", None), "gguf_path", None)
+            if gguf_path:
+                gguf_path = str(gguf_path)
+                res["gguf_path"] = gguf_path
+                if gguf_path in _seen_gguf_paths:
+                    logging.warning(
+                        "COLLAPSED GGUF: %s and %s are loading the same checkpoint (%s). "
+                        "Their results will be identical. "
+                        "Run scripts/convert_to_gguf.py --variant <base|sft|dpo> to produce "
+                        "per-variant GGUF files.",
+                        _seen_gguf_paths[gguf_path], tag, gguf_path,
+                    )
+                else:
+                    _seen_gguf_paths[gguf_path] = tag
+            if hasattr(pipeline, "flags"):
+                res["flags"] = {k: v for k, v in vars(pipeline.flags).items()}
             # Save per-model result immediately so progress is not lost on crash.
             per_model_path = Path(args.output_dir) / f"{tag}.json"
             per_model_path.parent.mkdir(parents=True, exist_ok=True)
