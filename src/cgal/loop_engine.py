@@ -319,6 +319,7 @@ class CGALLoopEngine:
 
             if not retrieved:
                 logger.info("Iteration %d: no novel retrieval candidates; escalating.", it)
+                response.cgal_iterations = it + 1
                 return self._escalate(query, response, reason="no_candidates")
 
             reranked = self.reranker.rerank(
@@ -409,9 +410,14 @@ class CGALLoopEngine:
 
             state.chosen_tool = TOOL_CREATE_TICKET
             last_state = state
+            response.confidence = state.confidence
+            response.cgal_iterations = it + 1
             return self._escalate(query, response, reason="low_confidence")
 
         logger.info("Exhausted %d CGAL iterations; escalating.", self.max_iterations)
+        if last_state is not None:
+            response.confidence = last_state.confidence
+            response.cgal_iterations = self.max_iterations
         return self._escalate(query, response, reason="max_iterations")
 
     # ------------------------------------------------------------------

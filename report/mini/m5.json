@@ -1,0 +1,306 @@
+{
+  "model_tag": "m5",
+  "n_queries": 10,
+  "per_query": [
+    {
+      "query": "When must you redetermine the estimated useful life?",
+      "model_tag": "m5",
+      "answer": "I could not confidently answer this from available sources. A support specialist will follow up (ticket TKT-C54987CD42, estimated response 24h).",
+      "latency_ms": 1051.7913750372827,
+      "ttft_ms": null,
+      "cgal_iterations": 3,
+      "confidence": 0.2745322287082672,
+      "grounding": 0.0,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8154435157775879,
+      "tool_accuracy": {
+        "name_match": 0.0,
+        "arg_f1": 0.0
+      },
+      "fcrs": {
+        "fcrs": 0.3854052305221557,
+        "completeness": 0.8154435157775879,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 0.5,
+        "escalation_accuracy": 0.0
+      }
+    },
+    {
+      "query": "When do services furnished on or after January 1, 2024, require reporting under Division FF, section 4136 of the CAA, 2023?",
+      "model_tag": "m5",
+      "answer": "I could not confidently answer this from available sources. A support specialist will follow up (ticket TKT-C4C08970B7, estimated response 24h).",
+      "latency_ms": 1230.0224589416757,
+      "ttft_ms": null,
+      "cgal_iterations": 3,
+      "confidence": 0.2730875015258789,
+      "grounding": 0.0,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.7992365956306458,
+      "tool_accuracy": {
+        "name_match": 0.0,
+        "arg_f1": 0.0
+      },
+      "fcrs": {
+        "fcrs": 0.379732808470726,
+        "completeness": 0.7992365956306458,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 0.5,
+        "escalation_accuracy": 0.0
+      }
+    },
+    {
+      "query": "What must be true first, then second, and what happens next for a grant recipient to satisfy the service obligation by teaching history?",
+      "model_tag": "m5",
+      "answer": "I could not confidently answer this from available sources. A support specialist will follow up (ticket TKT-EA337B6638, estimated response 24h).",
+      "latency_ms": 1342.9702080320567,
+      "ttft_ms": null,
+      "cgal_iterations": 3,
+      "confidence": 0.24301297962665558,
+      "grounding": 0.0,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8066962361335754,
+      "tool_accuracy": {
+        "name_match": 0.0,
+        "arg_f1": 0.0
+      },
+      "fcrs": {
+        "fcrs": 0.38234368264675134,
+        "completeness": 0.8066962361335754,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 0.5,
+        "escalation_accuracy": 0.0
+      }
+    },
+    {
+      "query": "Why do some locations offer free electronic filing while others do not?",
+      "model_tag": "m5",
+      "answer": "Some businesses offer free e-file to their employees, members, or customers. Others offer it for a fee. Ask your employer or financial institution if they offer IRS e-file as an employee, member, or customer benefit [286f6a21af2586f3:0-0].",
+      "latency_ms": 30604.438708047383,
+      "ttft_ms": null,
+      "cgal_iterations": 1,
+      "confidence": 0.3138825297355652,
+      "grounding": 0.8,
+      "citation_f1": {
+        "precision": 0.2,
+        "recall": 1.0,
+        "f1": 0.33333333333333337
+      },
+      "recall_at_20": 1.0,
+      "bertscore_f1": 0.8319441080093384,
+      "tool_accuracy": {
+        "name_match": 0.0,
+        "arg_f1": 0.0
+      },
+      "fcrs": {
+        "fcrs": 0.9411804378032684,
+        "completeness": 0.8319441080093384,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the time frame for viewing 5 years of payment history?",
+      "model_tag": "m5",
+      "answer": "I could not confidently answer this from available sources. A support specialist will follow up (ticket TKT-5C5887F224, estimated response 24h).",
+      "latency_ms": 1236.172707984224,
+      "ttft_ms": null,
+      "cgal_iterations": 3,
+      "confidence": 0.2680228054523468,
+      "grounding": 0.0,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8177396059036255,
+      "tool_accuracy": {
+        "name_match": 0.0,
+        "arg_f1": 0.0
+      },
+      "fcrs": {
+        "fcrs": 0.3862088620662689,
+        "completeness": 0.8177396059036255,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 0.5,
+        "escalation_accuracy": 0.0
+      }
+    },
+    {
+      "query": "If an individual is not a bona fide resident of Puerto Rico for the tax year, what must they do?",
+      "model_tag": "m5",
+      "answer": "They must file tax returns with both Puerto Rico and the United States [62af77477dbd3006:0-0].",
+      "latency_ms": 14011.728167068213,
+      "ttft_ms": null,
+      "cgal_iterations": 1,
+      "confidence": 0.30085742473602295,
+      "grounding": 0.75,
+      "citation_f1": {
+        "precision": 0.2,
+        "recall": 1.0,
+        "f1": 0.33333333333333337
+      },
+      "recall_at_20": 1.0,
+      "bertscore_f1": 0.9070910811424255,
+      "tool_accuracy": {
+        "name_match": 0.0,
+        "arg_f1": 0.0
+      },
+      "fcrs": {
+        "fcrs": 0.9674818783998489,
+        "completeness": 0.9070910811424255,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How is the total medical expense calculated for driving 2,800 miles in 2025?",
+      "model_tag": "m5",
+      "answer": "The total medical expense is calculated by adding the $400 for gas, the $30 for oil, and the $100 for tolls and parking, resulting in $530 [43161ee941dc0186:0-0].",
+      "latency_ms": 15787.00100001879,
+      "ttft_ms": null,
+      "cgal_iterations": 1,
+      "confidence": 0.3347104489803314,
+      "grounding": 0.8620689655172413,
+      "citation_f1": {
+        "precision": 0.2,
+        "recall": 1.0,
+        "f1": 0.33333333333333337
+      },
+      "recall_at_20": 1.0,
+      "bertscore_f1": 0.9510039687156677,
+      "tool_accuracy": {
+        "name_match": 0.0,
+        "arg_f1": 0.0
+      },
+      "fcrs": {
+        "fcrs": 0.9828513890504835,
+        "completeness": 0.9510039687156677,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the maximum value of holiday or birthday gifts that employees can exclude from gross income without reporting?",
+      "model_tag": "m5",
+      "answer": "I could not confidently answer this from available sources. A support specialist will follow up (ticket TKT-5639629A8E, estimated response 24h).",
+      "latency_ms": 17335.687209037133,
+      "ttft_ms": null,
+      "cgal_iterations": 3,
+      "confidence": 0.2880329489707947,
+      "grounding": 0.0,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.7928572297096252,
+      "tool_accuracy": {
+        "name_match": 0.0,
+        "arg_f1": 0.0
+      },
+      "fcrs": {
+        "fcrs": 0.37750003039836877,
+        "completeness": 0.7928572297096252,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 0.5,
+        "escalation_accuracy": 0.0
+      }
+    },
+    {
+      "query": "Who qualifies for the solar or wind energy credit under section 48(a)(3)(A)?",
+      "model_tag": "m5",
+      "answer": "I could not confidently answer this from available sources. A support specialist will follow up (ticket TKT-D7086B1451, estimated response 24h).",
+      "latency_ms": 1150.3517089877278,
+      "ttft_ms": null,
+      "cgal_iterations": 3,
+      "confidence": 0.2834542393684387,
+      "grounding": 0.0,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.7843557596206665,
+      "tool_accuracy": {
+        "name_match": 0.0,
+        "arg_f1": 0.0
+      },
+      "fcrs": {
+        "fcrs": 0.37452451586723323,
+        "completeness": 0.7843557596206665,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 0.5,
+        "escalation_accuracy": 0.0
+      }
+    },
+    {
+      "query": "What is the period during which deductions would not be made for days spent in a psychiatric hospital?",
+      "model_tag": "m5",
+      "answer": "Deductions would not be made for days spent in a psychiatric hospital during the preceding 150 days, even though the hospital is later certified for participation [65c69dd6643df39a:0-0].",
+      "latency_ms": 15508.918832987547,
+      "ttft_ms": null,
+      "cgal_iterations": 1,
+      "confidence": 0.3130876421928406,
+      "grounding": 0.896551724137931,
+      "citation_f1": {
+        "precision": 0.2,
+        "recall": 1.0,
+        "f1": 0.33333333333333337
+      },
+      "recall_at_20": 1.0,
+      "bertscore_f1": 0.8971932530403137,
+      "tool_accuracy": {
+        "name_match": 0.0,
+        "arg_f1": 0.0
+      },
+      "fcrs": {
+        "fcrs": 0.9640176385641097,
+        "completeness": 0.8971932530403137,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    }
+  ],
+  "aggregate": {
+    "grounding": 0.33086206896551723,
+    "citation_f1": 0.13333333333333336,
+    "citation_precision": 0.08,
+    "citation_recall": 0.4,
+    "bertscore_f1": 0.8403561353683472,
+    "recall_at_20": 0.4,
+    "tool_name_match": 0.0,
+    "tool_arg_f1": 0.0,
+    "fcrs": 0.6141246473789215,
+    "completeness": 0.8403561353683472,
+    "citation_coverage": 0.4,
+    "tool_appropriateness": 0.7,
+    "escalation_accuracy_per_query": 0.4,
+    "latency_p50": 7677.349187550135,
+    "latency_p95": 24633.500533492755,
+    "latency_mean": 9925.908237614203,
+    "cgal_efficiency": 2.2,
+    "escalation_f1": 0.0
+  }
+}
