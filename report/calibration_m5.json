@@ -1,0 +1,8 @@
+{
+  "model_tag": "m5",
+  "n": 648,
+  "temperature": 0.5,
+  "ece_before": 0.06817100257685153,
+  "ece_after": 0.030908711945230614,
+  "auroc": 1.0
+}
