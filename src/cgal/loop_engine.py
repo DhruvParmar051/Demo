@@ -386,7 +386,7 @@ class CGALLoopEngine:
                 try:
                     tool_result = self.tool_executor.execute(
                         chosen,
-                        {"query": refined_query, "iteration": it},
+                        {"query": refined_query},
                     )
                 except Exception as exc:
                     logger.warning("Tool %s failed: %s", chosen, exc)
@@ -395,7 +395,7 @@ class CGALLoopEngine:
                 response.tool_calls.append(
                     ToolCall(
                         tool_name=chosen,  # type: ignore[arg-type]
-                        args={"query": refined_query, "iteration": it},
+                        args={"query": refined_query},
                         result=tool_result,
                         latency_ms=tool_latency_ms,
                         iteration=it,
@@ -603,7 +603,13 @@ class CGALLoopEngine:
         try:
             result = self.tool_executor.execute(
                 TOOL_CREATE_TICKET,
-                {"query": query, "reason": reason, "session_id": response.session_id},
+                {
+                    "query": query,
+                    "summary": reason,
+                    "category": "other",
+                    "severity": "medium",
+                    "evidence_gap": reason,
+                },
             )
         except Exception as exc:
             logger.error("CreateTicket tool failed: %s", exc)

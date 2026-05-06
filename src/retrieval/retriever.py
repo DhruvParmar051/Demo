@@ -186,11 +186,14 @@ class HybridRetriever:
             return self._default_alpha
 
         features = self.extract_query_features(query)
+        # Feature order must match AlphaNetwork.get_features():
+        # log_query_length, keyword_density, domain_hash, query_emb_norm, has_exact_phrase
         feat_tensor = torch.tensor(
             [
                 [
                     features["length"],
                     features["keyword_density"],
+                    0.0,  # domain_hash — no domain at retrieval time, use neutral 0
                     features["embedding_norm"],
                     features["has_exact_phrase"],
                 ]
