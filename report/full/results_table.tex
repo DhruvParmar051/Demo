@@ -1,0 +1,13 @@
+\begin{table}[t]
+\centering
+\small
+\caption{AegisRAG evaluation results across baselines and improved models. Higher is better except for latency and CGAL efficiency.}
+\label{tab:aegis-results}
+\begin{tabular}{lrrrrrrrrrrrr}
+\toprule
+Model & fcrs & grounding & citation\_f1 & bertscore\_f1 & recall\_at\_20 & completeness & citation\_coverage & tool\_appropriateness & tool\_name\_match & cgal\_efficiency & latency\_p50 & latency\_p95 \\
+\midrule
+b2 & 0.8794 & 0.6217 & 0.6735 & 0.8675 & 0.0714 & 0.8668 & 0.7041 & 1.0000 & 1.0000 & 0.0000 & 13851.9177 & 16978.9200 \\
+\bottomrule
+\end{tabular}
+\end{table}
