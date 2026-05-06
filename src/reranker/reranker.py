@@ -7,6 +7,7 @@ cross-encoder for pairwise relevance scoring.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,23 @@ from src.utils.config import get_config
 from src.utils.device import get_device
 
 logger = logging.getLogger(__name__)
+
+
+@contextlib.contextmanager
+def _mask_mps():
+    """Temporarily report MPS as unavailable.
+
+    jina-colbert-v2 (trust_remote_code) calls torch.backends.mps.is_available()
+    during __init__ and moves itself to MPS, triggering a hard LLVM abort on
+    GQA matmul shapes that MPS cannot compile.  Masking MPS keeps the model
+    on CPU for the duration of initialisation and inference.
+    """
+    original = torch.backends.mps.is_available
+    torch.backends.mps.is_available = lambda: False
+    try:
+        yield
+    finally:
+        torch.backends.mps.is_available = original
 
 
 class ColBERTReranker:
@@ -81,47 +99,41 @@ class ColBERTReranker:
         has_state_dict = pt_weights is not None and pt_weights.exists()
         has_hf_config = (Path(load_path) / "config.json").exists() if Path(load_path).is_dir() else False
 
-        if has_state_dict and not has_hf_config:
-            # Fine-tuned checkpoint saved as raw state dict — load base model
-            # first, then overlay the fine-tuned weights.
-            logger.info(
-                "Checkpoint %s has model.pt but no config.json; "
-                "loading base model '%s' then applying fine-tuned weights.",
-                load_path, model_name,
-            )
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
-            state = torch.load(str(pt_weights), map_location="cpu")
-            # Accept both raw state dict and {"model": state_dict} wrappers.
-            if isinstance(state, dict) and "model" in state and not any(
-                k.startswith("encoder.") for k in state
-            ):
-                state = state["model"]
-            # Remap encoder.* → bert.* when the checkpoint was trained on a
-            # Jina-ColBERT backbone but is being loaded into a BERT cross-encoder.
-            # This handles the architectural prefix mismatch transparently.
-            base_keys = set(self.model.state_dict().keys())
-            if any(k.startswith("encoder.") for k in state) and not any(
-                k.startswith("encoder.") for k in base_keys
-            ):
-                state = {
-                    k.replace("encoder.", "bert.", 1) if k.startswith("encoder.") else k: v
-                    for k, v in state.items()
-                }
-                logger.info("Remapped encoder.* → bert.* for cross-encoder compatibility.")
-            missing, unexpected = self.model.load_state_dict(state, strict=False)
-            if missing:
-                logger.warning("Missing keys when loading fine-tuned weights: %s", missing[:5])
-        else:
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                load_path, trust_remote_code=True
-            )
-            self.model = AutoModelForSequenceClassification.from_pretrained(
-                load_path, trust_remote_code=True
-            )
+        with _mask_mps():
+            if has_state_dict and not has_hf_config:
+                logger.info(
+                    "Checkpoint %s has model.pt but no config.json; "
+                    "loading base model '%s' then applying fine-tuned weights.",
+                    load_path, model_name,
+                )
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
+                state = torch.load(str(pt_weights), map_location="cpu")
+                if isinstance(state, dict) and "model" in state and not any(
+                    k.startswith("encoder.") for k in state
+                ):
+                    state = state["model"]
+                base_keys = set(self.model.state_dict().keys())
+                if any(k.startswith("encoder.") for k in state) and not any(
+                    k.startswith("encoder.") for k in base_keys
+                ):
+                    state = {
+                        k.replace("encoder.", "bert.", 1) if k.startswith("encoder.") else k: v
+                        for k, v in state.items()
+                    }
+                missing, unexpected = self.model.load_state_dict(state, strict=False)
+                if missing:
+                    logger.warning("Missing keys when loading fine-tuned weights: %s", missing[:5])
+            else:
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    load_path, trust_remote_code=True
+                )
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    load_path, trust_remote_code=True
+                )
 
-        self.model.to(self.device)
-        self.model.eval()
+            self.model.to(self.device)
+            self.model.eval()
         logger.info("Reranker ready (%s)", load_path)
 
     # ------------------------------------------------------------------
@@ -198,7 +210,7 @@ class ColBERTReranker:
                 return_tensors="pt",
             ).to(self.device)
 
-            with torch.no_grad():
+            with _mask_mps(), torch.no_grad():
                 outputs = self.model(**encoded)
 
             # outputs.logits shape: (batch, num_labels)

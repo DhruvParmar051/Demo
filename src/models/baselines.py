@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 
 from src.data.schema import QueryResponse, RetrievalResult
@@ -148,12 +149,9 @@ class BaselineB3(_BaselineBase):
         reranker_ckpt = getattr(cfg.checkpoints, "reranker", None)
         sft_adapter = getattr(cfg.checkpoints, "generator_sft", None)
 
-        if retriever_ckpt:
-            try:
-                self.vector_store = ChromaVectorStore(embedding_model_name=retriever_ckpt)
-            except Exception as exc:
-                logger.warning("Failed to load ft retriever: %s", exc)
-
+        # ChromaDB was indexed with the base embedding model; querying with the
+        # fine-tuned retriever checkpoint shifts the embedding space and causes
+        # ~50% of queries to return zero candidates.  Use base model for querying.
         if self.bm25_index is None:
             self.bm25_index = _load_bm25(getattr(cfg.paths, "bm25_index", None))
         if self.reranker is None:
@@ -162,11 +160,18 @@ class BaselineB3(_BaselineBase):
             except Exception:
                 self.reranker = ColBERTReranker()
 
-        if sft_adapter:
-            try:
-                self.generator = Generator(adapter_path=sft_adapter)
-            except Exception as exc:
-                logger.warning("Failed to load SFT adapter: %s", exc)
+        # Use the pre-merged SFT GGUF so adapter weights are actually applied.
+        # GGUF (llama-cpp) cannot load HF LoRA adapters at runtime.
+        legacy_gguf = Path(getattr(cfg.models.generator, "gguf_path", "checkpoints/aegis_final.gguf"))
+        sft_gguf = legacy_gguf.parent / "aegis_sft.gguf"
+        chosen_gguf = sft_gguf if sft_gguf.exists() else legacy_gguf
+        if not sft_gguf.exists():
+            logger.warning(
+                "aegis_sft.gguf not found; falling back to %s. "
+                "Run: python scripts/convert_to_gguf.py --variant sft",
+                chosen_gguf,
+            )
+        self.generator = Generator(gguf_path=str(chosen_gguf))
 
         self.retriever = HybridRetriever(
             vector_store=self.vector_store,

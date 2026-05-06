@@ -23,16 +23,39 @@ import argparse
 import logging
 import os
 import sys
+import warnings
 from pathlib import Path
+
+# ── Silence noisy third-party warnings before any imports ──────────────────
+# MPS: fall back to CPU for unsupported ops instead of hard-crashing.
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+# HuggingFace Hub: suppress unauthenticated-request nag.
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "0")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+# transformers: suppress deprecation spam and generation-flag warnings.
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
+
+warnings.filterwarnings("ignore")  # catch anything the env vars miss
 
 import yaml
 from dotenv import load_dotenv
 from loguru import logger
 
-# Silence noisy third-party warnings before any HF imports.
-os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
-logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
-logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+# Silence noisy third-party loggers.
+for _noisy in (
+    "huggingface_hub", "huggingface_hub.file_download",
+    "huggingface_hub.utils._headers", "huggingface_hub.utils._cache_manager",
+    "transformers", "transformers.modeling_utils", "transformers.tokenization_utils_base",
+    "transformers.generation.utils", "transformers.trainer",
+    "sentence_transformers", "sentence_transformers.SentenceTransformer",
+    "peft", "peft.tuners", "peft.tuners.lora",
+    "httpx", "httpcore",
+    "torch", "torch.nn",
+    "bitsandbytes",
+    "accelerate",
+):
+    logging.getLogger(_noisy).setLevel(logging.ERROR)
 
 
 # ---------------------------------------------------------------------------

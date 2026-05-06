@@ -92,6 +92,15 @@ class Generator:
             self.backend = "gguf"
         else:
             self.backend = "hf"
+
+        # GGUF (llama-cpp) cannot load HuggingFace LoRA adapters at all.
+        # adapter_path is only honoured by the "hf" backend.
+        if self.adapter_path and self.backend == "gguf":
+            logger.warning(
+                "adapter_path=%s ignored: GGUF backend cannot load HF adapters. "
+                "To apply SFT/DPO weights, merge them into the GGUF or switch to backend='hf'.",
+                self.adapter_path,
+            )
         self.quantize_4bit = quantize_4bit
         self.device = get_device(cfg.device.preferred_device)
         self.device_str = get_device_string(self.device)

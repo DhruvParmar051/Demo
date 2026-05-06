@@ -43,22 +43,33 @@ class PipelineFlags:
     adaptive_alpha: bool = True
     decomposition: bool = True
     rule_based_tools: bool = False
+    # Which pre-merged GGUF variant to load: "base" | "sft" | "dpo"
+    gguf_variant: str = "dpo"
 
     @classmethod
     def for_tag(cls, tag: str) -> "PipelineFlags":
         tag = tag.lower().strip()
         mapping = {
+            # M1 – baseline, no fine-tuning
             "m1": cls(cgal=False, dpo=False, verify=False,
                       adaptive_alpha=False, decomposition=False,
-                      rule_based_tools=True),
+                      rule_based_tools=True, gguf_variant="base"),
+            # M2 – CGAL loop + SFT generator
             "m2": cls(cgal=True, dpo=False, verify=False,
-                      adaptive_alpha=False, decomposition=False),
+                      adaptive_alpha=False, decomposition=False,
+                      gguf_variant="sft"),
+            # M3 – CGAL loop + DPO-aligned generator
             "m3": cls(cgal=True, dpo=True, verify=False,
-                      adaptive_alpha=False, decomposition=False),
+                      adaptive_alpha=False, decomposition=False,
+                      gguf_variant="dpo"),
+            # M4 – M3 + answer verifier
             "m4": cls(cgal=True, dpo=True, verify=True,
-                      adaptive_alpha=False, decomposition=False),
+                      adaptive_alpha=False, decomposition=False,
+                      gguf_variant="dpo"),
+            # M5 – full system
             "m5": cls(cgal=True, dpo=True, verify=True,
-                      adaptive_alpha=True, decomposition=True),
+                      adaptive_alpha=True, decomposition=True,
+                      gguf_variant="dpo"),
         }
         if tag not in mapping:
             raise ValueError(f"Unknown model tag: {tag}")
@@ -118,24 +129,14 @@ class M5Pipeline:
         self.flags = flags
         self.model_tag = model_tag
 
-        # Load fine-tuned retriever when available (mirrors BaselineB3 pattern).
+        # Always query ChromaDB with the base embedding model — the fine-tuned
+        # retriever checkpoint has a shifted embedding space relative to the
+        # indexed vectors, causing ~50% of queries to return zero candidates.
+        # Re-indexing with the fine-tuned weights would be needed to use it here.
         if vector_store is not None:
             self.vector_store = vector_store
         else:
-            retriever_ckpt = getattr(cfg.checkpoints, "retriever", None)
-            if retriever_ckpt and Path(retriever_ckpt).exists():
-                try:
-                    self.vector_store = ChromaVectorStore(
-                        embedding_model_name=retriever_ckpt
-                    )
-                    logger.info("Loaded fine-tuned retriever from %s", retriever_ckpt)
-                except Exception as exc:
-                    logger.warning(
-                        "Fine-tuned retriever load failed (%s); using base model.", exc
-                    )
-                    self.vector_store = ChromaVectorStore()
-            else:
-                self.vector_store = ChromaVectorStore()
+            self.vector_store = ChromaVectorStore()
 
         if bm25_index is None:
             bm25_index = BM25Index()
@@ -148,21 +149,28 @@ class M5Pipeline:
         self.bm25_index = bm25_index
         self.reranker = reranker or ColBERTReranker()
 
-        # Load SFT or DPO adapter for the generator.
-        # M3/M4/M5 have flags.dpo=True → prefer DPO adapter; M1/M2 get SFT only.
+        # Select the pre-merged GGUF for this variant so that adapter weights are
+        # actually applied at inference time.  GGUF (llama-cpp) cannot load HF
+        # LoRA adapters at runtime, so each variant must be its own GGUF file
+        # produced by scripts/convert_to_gguf.py --variant <base|sft|dpo>.
         if generator is not None:
             self.generator = generator
         else:
-            sft_path = getattr(cfg.checkpoints, "generator_sft", None)
-            dpo_path = getattr(cfg.checkpoints, "generator_dpo", None)
-            adapter: str | None = None
-            if flags.dpo and dpo_path and Path(dpo_path).exists():
-                adapter = dpo_path
-                logger.info("Generator will load DPO adapter from %s", adapter)
-            elif sft_path and Path(sft_path).exists():
-                adapter = sft_path
-                logger.info("Generator will load SFT adapter from %s", adapter)
-            self.generator = Generator(adapter_path=adapter)
+            base_dir = Path(getattr(cfg.checkpoints, "generator_sft", "checkpoints/generator_sft")).parent
+            variant_gguf = base_dir / f"aegis_{flags.gguf_variant}.gguf"
+            # Fall back to the legacy single GGUF when per-variant files have not
+            # been exported yet so existing setups keep working.
+            legacy_gguf = Path(getattr(cfg.models.generator, "gguf_path", "checkpoints/aegis_final.gguf"))
+            chosen_gguf = variant_gguf if variant_gguf.exists() else legacy_gguf
+            if not variant_gguf.exists():
+                logger.warning(
+                    "Per-variant GGUF %s not found; falling back to %s. "
+                    "Run: python scripts/convert_to_gguf.py --variant %s",
+                    variant_gguf, chosen_gguf, flags.gguf_variant,
+                )
+            else:
+                logger.info("Using variant GGUF %s", chosen_gguf)
+            self.generator = Generator(gguf_path=str(chosen_gguf))
 
         # Confidence head -- required for CGAL; synthesize no-op if disabled.
         if flags.cgal:
