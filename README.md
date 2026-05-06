@@ -37,7 +37,7 @@ Ten things that make it different from vanilla RAG:
 | 4 | **Adaptive alpha fusion** — learned per-query dense/sparse weight, not fixed 0.5 | `src/cgal/alpha_network.py` |
 | 5 | **Query decomposition** — multi-part questions split into atomic sub-queries, each gets its own CGAL run | `src/decomposer/` |
 | 6 | **BGE-m3 multilingual embeddings** — future language expansion without re-architecture | `src/retrieval/vector_store.py` |
-| 7 | **SSE token streaming** — TTFT ~200 ms, perceived-latency drop of ~10x | `src/serving/sse.py` |
+| 7 | **SSE token streaming** — tokens emitted incrementally; TTFT target ~200 ms on GPU (not separately benchmarked on CPU) | `src/serving/sse.py` |
 | 8 | **Continuous confidence calibration** — MSE on BERTScore soft labels, not binary BCE. ECE < 0.05 on dev. | `src/evaluation/calibration.py` |
 | 9 | **FCRS — First-Contact Resolution Score** — a domain-specific composite metric that captures the business goal, not just text quality | `src/evaluation/fcrs.py` |
 | 10 | **Citation-weighted CE loss** — tokens inside `[doc_id:start-end]` markers get 3× loss weight during SFT | `src/training/losses/citation_weighted_ce.py` |
@@ -117,16 +117,18 @@ streamlit run demo/app.py -- --api http://localhost:8000
                                                     CreateTicket (SQLite)
 ```
 
-**Latency budget** (p50, consumer hardware):
+**Latency budget:**
 
-| Path | Wall time | TTFT |
+> **Hardware note:** Target figures below are for a Kaggle T4 GPU (16 GB VRAM).
+> Local CPU benchmarks (Mac, no GPU) measure p50 of ~23–34 s due to CPU-only
+> HuggingFace inference (`gguf_n_gpu_layers: 0`). TTFT is not separately
+> instrumented in the current benchmark; the figures below are design targets.
+
+| Path | Target (T4 GPU) | Measured CPU p50 |
 |---|---|---|
-| High-confidence direct answer | ~1.7 s | ~200 ms |
-| Medium-confidence + async verify | ~1.9 s | ~200 ms |
-| One tool-call iteration | ~2.1 s | ~250 ms |
-| Multi-part query (2 sub-queries, parallel) | ~1.8 s | ~200 ms |
-
-All within the 2.5 s SLO.
+| High-confidence direct answer | ~1.7 s | ~23 s |
+| Medium-confidence + async verify | ~1.9 s | ~24–27 s |
+| M5 full pipeline | ~2.0 s | ~34 s |
 
 ---
 
@@ -142,11 +144,11 @@ Evaluated on MultiDoc2Dial + IRS/SSA/DMV PDFs (see [`docs/DATASETS.md`](docs/DAT
 | Tool accuracy | — | — | 0.82 | **0.91** |
 | Escalation F1 | — | — | 0.80 | **0.88** |
 | **FCRS** | 0.35 | 0.60 | 0.76 | **0.84** |
-| Latency p50 | 1.6 s | 1.8 s | 1.9 s | **2.0 s** |
-| TTFT | — | — | — | **~200 ms** |
+| Latency p50 (CPU) | ~23 s | ~24 s | — | **~34 s** |
+| Latency p50 (T4 GPU target) | ~1.6 s | ~1.8 s | ~1.9 s | **~2.0 s** |
 | ECE (calibration) | — | — | — | **< 0.05** |
 
-> Numbers are **target figures from the system design**. Until the training sweep is committed to `checkpoints/`, reproducibility is limited — see [`report/PRODUCTION_CRITIQUE.md`](report/PRODUCTION_CRITIQUE.md) §1.1–1.2.
+> Grounding, Citation F1, BERTScore, FCRS, and Tool accuracy rows are **target figures from system design** (pre-checkpoint training). CPU latency figures are measured on a Mac (cpu-only mode). T4 GPU latency figures are design targets for the Kaggle training environment. See [`report/PRODUCTION_CRITIQUE.md`](report/PRODUCTION_CRITIQUE.md) §1.1–1.2 for a full critique.
 
 ---
 

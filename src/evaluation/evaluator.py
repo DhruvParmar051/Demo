@@ -182,12 +182,29 @@ class Evaluator:
 
             gold_chunk_ids = item.get("gold_chunk_ids", [])
             if gold_chunk_ids:
-                # Try chunk_id first; fall back to doc_id for pipelines that
-                # only populate doc_id on citations (e.g. baselines).
-                retrieved_ids = [c.chunk_id for c in response.citations]
-                if not any(rid in gold_chunk_ids for rid in retrieved_ids):
-                    retrieved_ids = [c.doc_id for c in response.citations]
-                row["recall_at_20"] = recall_at_k(retrieved_ids, gold_chunk_ids, k=20)
+                # Try chunk_id first (M5 path); fall back to doc_id comparison
+                # for baseline pipelines that only populate doc_id on citations.
+                # IMPORTANT: when falling back to doc_ids, compare against gold
+                # doc_ids (not gold chunk_ids) to avoid a doc_id vs chunk_id
+                # format mismatch that would always produce recall = 0.
+                chunk_ids = [c.chunk_id for c in response.citations if c.chunk_id]
+                if chunk_ids and any(rid in gold_chunk_ids for rid in chunk_ids):
+                    row["recall_at_20"] = recall_at_k(chunk_ids, gold_chunk_ids, k=20)
+                else:
+                    gold_doc_ids_for_recall = [
+                        c["doc_id"]
+                        for c in gold_citations
+                        if isinstance(c, dict) and c.get("doc_id")
+                    ]
+                    if gold_doc_ids_for_recall:
+                        retrieved_doc_ids = [
+                            c.doc_id for c in response.citations if c.doc_id
+                        ]
+                        row["recall_at_20"] = recall_at_k(
+                            retrieved_doc_ids, gold_doc_ids_for_recall, k=20
+                        )
+                    else:
+                        row["recall_at_20"] = float("nan")
             else:
                 # Fall back: use doc_ids from citations against gold citation doc_ids.
                 gold_doc_ids_for_recall = [
@@ -213,7 +230,11 @@ class Evaluator:
 
             if needed_tool:
                 row["tool_accuracy"] = tool_accuracy(response.tool_calls, needed_tool)
+            elif response.tool_calls:
+                # No tool was required but the model called one anyway — false positive.
+                row["tool_accuracy"] = {"name_match": 0.0, "arg_f1": 0.0}
             else:
+                # Correct: no tool needed and none was called.
                 row["tool_accuracy"] = {"name_match": 1.0, "arg_f1": 1.0}
 
             # Enrich gold dict with fields FCRS needs but test set omits.

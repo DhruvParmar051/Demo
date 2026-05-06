@@ -148,17 +148,20 @@ class CGALLoopEngine:
         self,
         query: str,
         stream: bool = False,
+        history: list[dict[str, str]] | None = None,
     ) -> QueryResponse | AsyncIterator[dict[str, Any]]:
         """Run the CGAL loop. Returns a :class:`QueryResponse` or an async iterator."""
         if stream:
-            return self._run_streaming(query)
-        return self._run_blocking(query)
+            return self._run_streaming(query, history=history)
+        return self._run_blocking(query, history=history)
 
     # ------------------------------------------------------------------
     # Blocking path
     # ------------------------------------------------------------------
 
-    def _run_blocking(self, query: str) -> QueryResponse:
+    def _run_blocking(
+        self, query: str, history: list[dict[str, str]] | None = None
+    ) -> QueryResponse:
         t_start = time.perf_counter()
         session_id = str(uuid.uuid4())
 
@@ -176,7 +179,7 @@ class CGALLoopEngine:
             decomposed = True
             logger.info("Decomposed query into %d sub-queries.", len(sub_queries))
             sub_responses: list[QueryResponse] = [
-                self._run_single(sq, session_id) for sq in sub_queries
+                self._run_single(sq, session_id, history=history) for sq in sub_queries
             ]
             merger = getattr(self.decomposer, "merger", None)
             if merger is None:
@@ -190,7 +193,7 @@ class CGALLoopEngine:
             merged.latency_ms = (time.perf_counter() - t_start) * 1000.0
             return merged
 
-        response = self._run_single(query, session_id)
+        response = self._run_single(query, session_id, history=history)
         response.decomposed = decomposed
         response.sub_queries = sub_queries
         response.latency_ms = (time.perf_counter() - t_start) * 1000.0
@@ -200,11 +203,15 @@ class CGALLoopEngine:
     # Streaming path
     # ------------------------------------------------------------------
 
-    async def _run_streaming(self, query: str) -> AsyncIterator[dict[str, Any]]:
+    async def _run_streaming(
+        self,
+        query: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
         t_start = time.perf_counter()
         session_id = str(uuid.uuid4())
 
-        response = await asyncio.to_thread(self._run_single, query, session_id)
+        response = await asyncio.to_thread(self._run_single, query, session_id, history)
 
         yield {
             "type": "meta",
@@ -255,7 +262,12 @@ class CGALLoopEngine:
     # Core single-query loop
     # ------------------------------------------------------------------
 
-    def _run_single(self, query: str, session_id: str) -> QueryResponse:
+    def _run_single(
+        self,
+        query: str,
+        session_id: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> QueryResponse:
         """Run the CGAL loop for a single (non-decomposed) query."""
         response = QueryResponse(
             answer="",
@@ -342,6 +354,7 @@ class CGALLoopEngine:
                     response=response,
                     run_verify=False,
                     confidence_before=prev_conf,
+                    history=history,
                 )
 
             if conf >= self.med_conf:
@@ -353,6 +366,7 @@ class CGALLoopEngine:
                     response=response,
                     run_verify=True,
                     confidence_before=prev_conf,
+                    history=history,
                 )
                 # If NLI verification fails and we have iterations remaining, retry
                 # with a refined query instead of returning a potentially ungrounded answer.
@@ -515,6 +529,7 @@ class CGALLoopEngine:
         response: QueryResponse,
         run_verify: bool,
         confidence_before: float | None,
+        history: list[dict[str, str]] | None = None,
     ) -> QueryResponse:
         """Generate an answer, optionally verify it via NLI, and populate response."""
         t_gen = time.perf_counter()
@@ -523,7 +538,10 @@ class CGALLoopEngine:
             for c, s in state.reranked
         ]
         try:
-            answer = self.generator.generate(query=refined_query, context=contexts)
+            prompt = self.generator._build_prompt(
+                None, refined_query, contexts, history=history
+            )
+            answer = self.generator.generate(prompt=prompt)
         except TypeError:
             answer = self.generator.generate(refined_query, contexts)
         gen_latency_ms = (time.perf_counter() - t_gen) * 1000.0

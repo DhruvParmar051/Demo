@@ -53,6 +53,11 @@ try:
 
         query: str = Field(..., min_length=1, max_length=8192)
         model_tag: str = Field("m5")
+        conversation_history: list[dict[str, str]] = Field(
+            default_factory=list,
+            description="Prior turns as [{'role': 'user'|'assistant', 'content': '...'}]. "
+            "Injected into the generator prompt before the current query.",
+        )
 
 except ImportError:
     # fastapi not installed — create_app will raise a clear error at call time.
@@ -192,9 +197,10 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
 
         pipeline = await registry.get(req.model_tag)
         t_start = time.perf_counter()
+        history = req.conversation_history or None
         try:
             response: QueryResponse = await asyncio.to_thread(
-                pipeline.run, req.query
+                pipeline.run, req.query, False, history
             )
         except Exception as exc:
             logger.exception("query failed")
@@ -253,7 +259,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
                     or getattr(engine, "run_streaming", None)
                 )
                 if stream_fn is not None:
-                    agen = stream_fn(req.query)
+                    agen = stream_fn(req.query, history=req.conversation_history or None)
                     if asyncio.iscoroutine(agen):
                         agen = await agen
 

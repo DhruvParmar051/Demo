@@ -97,6 +97,18 @@ class ColBERTReranker:
                 k.startswith("encoder.") for k in state
             ):
                 state = state["model"]
+            # Remap encoder.* → bert.* when the checkpoint was trained on a
+            # Jina-ColBERT backbone but is being loaded into a BERT cross-encoder.
+            # This handles the architectural prefix mismatch transparently.
+            base_keys = set(self.model.state_dict().keys())
+            if any(k.startswith("encoder.") for k in state) and not any(
+                k.startswith("encoder.") for k in base_keys
+            ):
+                state = {
+                    k.replace("encoder.", "bert.", 1) if k.startswith("encoder.") else k: v
+                    for k, v in state.items()
+                }
+                logger.info("Remapped encoder.* → bert.* for cross-encoder compatibility.")
             missing, unexpected = self.model.load_state_dict(state, strict=False)
             if missing:
                 logger.warning("Missing keys when loading fine-tuned weights: %s", missing[:5])

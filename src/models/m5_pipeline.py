@@ -118,7 +118,25 @@ class M5Pipeline:
         self.flags = flags
         self.model_tag = model_tag
 
-        self.vector_store = vector_store or ChromaVectorStore()
+        # Load fine-tuned retriever when available (mirrors BaselineB3 pattern).
+        if vector_store is not None:
+            self.vector_store = vector_store
+        else:
+            retriever_ckpt = getattr(cfg.checkpoints, "retriever", None)
+            if retriever_ckpt and Path(retriever_ckpt).exists():
+                try:
+                    self.vector_store = ChromaVectorStore(
+                        embedding_model_name=retriever_ckpt
+                    )
+                    logger.info("Loaded fine-tuned retriever from %s", retriever_ckpt)
+                except Exception as exc:
+                    logger.warning(
+                        "Fine-tuned retriever load failed (%s); using base model.", exc
+                    )
+                    self.vector_store = ChromaVectorStore()
+            else:
+                self.vector_store = ChromaVectorStore()
+
         if bm25_index is None:
             bm25_index = BM25Index()
             bm25_path = getattr(cfg.paths, "bm25_index", None)
@@ -129,17 +147,70 @@ class M5Pipeline:
                     logger.warning("BM25 load failed (%s); using empty index.", exc)
         self.bm25_index = bm25_index
         self.reranker = reranker or ColBERTReranker()
-        self.generator = generator or Generator()
+
+        # Load SFT or DPO adapter for the generator.
+        # M3/M4/M5 have flags.dpo=True → prefer DPO adapter; M1/M2 get SFT only.
+        if generator is not None:
+            self.generator = generator
+        else:
+            sft_path = getattr(cfg.checkpoints, "generator_sft", None)
+            dpo_path = getattr(cfg.checkpoints, "generator_dpo", None)
+            adapter: str | None = None
+            if flags.dpo and dpo_path and Path(dpo_path).exists():
+                adapter = dpo_path
+                logger.info("Generator will load DPO adapter from %s", adapter)
+            elif sft_path and Path(sft_path).exists():
+                adapter = sft_path
+                logger.info("Generator will load SFT adapter from %s", adapter)
+            self.generator = Generator(adapter_path=adapter)
 
         # Confidence head -- required for CGAL; synthesize no-op if disabled.
         if flags.cgal:
-            self.confidence_head = confidence_head or ConfidenceHead()
+            if confidence_head is not None:
+                self.confidence_head = confidence_head
+            else:
+                head_ckpt_dir = getattr(cfg.checkpoints, "confidence_head", None)
+                head_ckpt = (
+                    Path(head_ckpt_dir) / "confidence_head.pt"
+                    if head_ckpt_dir
+                    else None
+                )
+                if head_ckpt and head_ckpt.exists():
+                    try:
+                        self.confidence_head = ConfidenceHead.load(head_ckpt)
+                        logger.info("Loaded ConfidenceHead from %s", head_ckpt)
+                    except Exception as exc:
+                        logger.warning(
+                            "ConfidenceHead load failed (%s); using untrained head.", exc
+                        )
+                        self.confidence_head = ConfidenceHead()
+                else:
+                    self.confidence_head = ConfidenceHead()
             self.confidence_head.eval()
         else:
             self.confidence_head = _StubConfidenceHead(high_conf=1.0)
 
-        # Alpha network only in M5.
-        self.alpha_network = alpha_network if flags.adaptive_alpha else None
+        # Alpha network only in M5 -- load from checkpoint when available.
+        if not flags.adaptive_alpha:
+            self.alpha_network = None
+        elif alpha_network is not None:
+            self.alpha_network = alpha_network
+        else:
+            alpha_ckpt_dir = getattr(cfg.checkpoints, "alpha_network", None)
+            alpha_ckpt = (
+                Path(alpha_ckpt_dir) / "model.pt" if alpha_ckpt_dir else None
+            )
+            if alpha_ckpt and alpha_ckpt.exists():
+                try:
+                    self.alpha_network = AlphaNetwork.load(alpha_ckpt)
+                    logger.info("Loaded AlphaNetwork from %s", alpha_ckpt)
+                except Exception as exc:
+                    logger.warning(
+                        "AlphaNetwork load failed (%s); using fixed alpha.", exc
+                    )
+                    self.alpha_network = None
+            else:
+                self.alpha_network = None
 
         # Verifier only enabled when flag is set.
         self.answer_verify = answer_verify if flags.verify else None
@@ -204,9 +275,14 @@ class M5Pipeline:
         flags = PipelineFlags.for_tag(tag)
         return cls(flags=flags, config=config, model_tag=tag)
 
-    def run(self, query: str, stream: bool = False) -> Any:
+    def run(
+        self,
+        query: str,
+        stream: bool = False,
+        history: list[dict[str, str]] | None = None,
+    ) -> Any:
         """Run the pipeline. Returns QueryResponse or an async iterator."""
-        response = self.engine.run(query, stream=stream)
+        response = self.engine.run(query, stream=stream, history=history)
         if isinstance(response, QueryResponse):
             response.model_tag = self.model_tag
         return response

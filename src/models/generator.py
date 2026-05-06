@@ -163,14 +163,11 @@ class Generator:
         context: list[RetrievalResult],
         max_new_tokens: int | None = None,
         temperature: float = 0.0,
+        history: list[dict[str, str]] | None = None,
     ) -> tuple[str, list[Citation]]:
         """Generate and parse citations out of the answer."""
-        answer = self.generate(
-            query=query,
-            context=context,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-        )
+        prompt = self._build_prompt(None, query, context, history=history)
+        answer = self.generate(prompt=prompt, max_new_tokens=max_new_tokens, temperature=temperature)
         citations = self.parse_citations(answer, context)
         return answer, citations
 
@@ -235,6 +232,7 @@ class Generator:
         prompt: str | None,
         query: str | None,
         context: Iterable[Any] | None,
+        history: list[dict[str, str]] | None = None,
     ) -> str:
         if prompt is not None and query is None:
             return prompt
@@ -252,9 +250,25 @@ class Generator:
                 )
         context_str = "\n\n".join(ctx_blocks) if ctx_blocks else "(no context)"
         q = query or ""
+
+        # Build prior-turn block from conversation history.
+        history_str = ""
+        if history:
+            turns: list[str] = []
+            for turn in history:
+                role = turn.get("role", "")
+                content = turn.get("content", "")
+                if role == "user":
+                    turns.append(f"<|user|>\n{content}")
+                elif role == "assistant":
+                    turns.append(f"<|assistant|>\n{content}")
+            if turns:
+                history_str = "\n".join(turns) + "\n"
+
         return (
             f"<|system|>\n{SYSTEM_PROMPT}\n"
             f"<|context|>\n{context_str}\n"
+            f"{history_str}"
             f"<|user|>\n{q}\n"
             f"<|assistant|>\n"
         )
