@@ -1,0 +1,2770 @@
+{
+  "model_tag": "b2",
+  "n_queries": 98,
+  "per_query": [
+    {
+      "query": "When must you redetermine the estimated useful life?",
+      "model_tag": "b2",
+      "answer": "You must redetermine the estimated useful life only when the change is substantial and there is a clear reason for making the change [65b40bba49859022:0-0].",
+      "latency_ms": 15679.958166991128,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6538461538461539,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9389819502830505,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9786436825990676,
+        "completeness": 0.9389819502830505,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "When do services furnished on or after January 1, 2024, require reporting under Division FF, section 4136 of the CAA, 2023?",
+      "model_tag": "b2",
+      "answer": "Services furnished on or after January 1, 2024, require reporting under Division FF, section 4136 of the CAA, 2023 [69d0085029c5fb54:0-0].",
+      "latency_ms": 14452.845749998232,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.45454545454545453,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9392404556274414,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.7287341594696044,
+        "completeness": 0.9392404556274414,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What must be true first, then second, and what happens next for a grant recipient to satisfy the service obligation by teaching history?",
+      "model_tag": "b2",
+      "answer": "First, history must be designated as a high-need field in the Nationwide List for the state where the grant recipient intends to teach to satisfy the service obligation. Second, the grant recipient must begin teaching history in that state [49b040580e3ee33d:0-0].",
+      "latency_ms": 14678.74879197916,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.7209302325581395,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 1.0,
+      "bertscore_f1": 0.8926594853401184,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9624308198690414,
+        "completeness": 0.8926594853401184,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Why do some locations offer free electronic filing while others do not?",
+      "model_tag": "b2",
+      "answer": "Some businesses offer free e-file to their employees, members, or customers. Others offer it for a fee. Ask your employer or financial institution if they offer IRS e-file as an employee, member, or customer benefit [286f6a21af2586f3:0-0].",
+      "latency_ms": 13531.243415985955,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.4,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8319441080093384,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9411804378032684,
+        "completeness": 0.8319441080093384,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the time frame for viewing 5 years of payment history?",
+      "model_tag": "b2",
+      "answer": "You can view 5 years of payment history [286f6a21af2586f3:0-0].",
+      "latency_ms": 12865.37449999014,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.7272727272727273,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8388624787330627,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6936018675565719,
+        "completeness": 0.8388624787330627,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "If an individual is not a bona fide resident of Puerto Rico for the tax year, what must they do?",
+      "model_tag": "b2",
+      "answer": "They must file tax returns with both Puerto Rico and the United States [62af77477dbd3006:0-0].",
+      "latency_ms": 13909.308208007133,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9070910811424255,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9674818783998489,
+        "completeness": 0.9070910811424255,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How is the total medical expense calculated for driving 2,800 miles in 2025?",
+      "model_tag": "b2",
+      "answer": "The total medical expense is calculated by adding the $400 for gas, the $30 for oil, and the $100 for tolls and parking, resulting in $530 [43161ee941dc0186:0-0].",
+      "latency_ms": 16006.22516698786,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.7586206896551724,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9510039687156677,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9828513890504835,
+        "completeness": 0.9510039687156677,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the maximum value of holiday or birthday gifts that employees can exclude from gross income without reporting?",
+      "model_tag": "b2",
+      "answer": "Employees can exclude up to $7,500 ($3,750 if married filing separately) of holiday or birthday gifts with a low fair market value (FMV) from gross income [2691a5ae27cd64e6:0-0].",
+      "latency_ms": 14466.724958008854,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.3548387096774194,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8680552244186401,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.703819328546524,
+        "completeness": 0.8680552244186401,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Who qualifies for the solar or wind energy credit under section 48(a)(3)(A)?",
+      "model_tag": "b2",
+      "answer": "Qualified solar or wind energy property is eligible for the credit [af6c8bb6ff0481b2:0-0].",
+      "latency_ms": 13745.837416005088,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6428571428571429,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.7954335808753967,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9284017533063889,
+        "completeness": 0.7954335808753967,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the period during which deductions would not be made for days spent in a psychiatric hospital?",
+      "model_tag": "b2",
+      "answer": "Deductions would not be made for days spent in a psychiatric hospital during the preceding 150 days, even though the hospital is later certified for participation as a psychiatric hospital [65c69dd6643df39a:0-0].",
+      "latency_ms": 15241.19800000335,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6666666666666666,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8952147960662842,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9633251786231993,
+        "completeness": 0.8952147960662842,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Under what condition does the deduction for certain expenses not apply?",
+      "model_tag": "b2",
+      "answer": "The deduction for certain expenses does not apply if the use of the property is for the convenience of the employer or required as a condition of employment [af6c8bb6ff0481b2:0-0].",
+      "latency_ms": 13493.214833986713,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6129032258064516,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8330774903297424,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6915771216154099,
+        "completeness": 0.8330774903297424,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "When donating a fraction of an interest in tangible personal property, which form is required and how must it be submitted?",
+      "model_tag": "b2",
+      "answer": "Form 1098-C is required, and you must attach Copy B of the form to Form 8453, U.S. Individual Income Tax Transmittal for an IRS e-file Return [cfd84243fe329dd4:0-0].",
+      "latency_ms": 14880.48062499729,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.25,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8518068790435791,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9481324076652526,
+        "completeness": 0.8518068790435791,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How does the location of a home affect the source of income from its sale?",
+      "model_tag": "b2",
+      "answer": "If you are a bona fide resident of Guam and sell your home located in Guam, the gain on the sale is sourced in Guam [62af77477dbd3006:0-0].",
+      "latency_ms": 14114.287500007777,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.7857142857142857,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8755393028259277,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9481921553611754,
+        "completeness": 0.8519775867462158,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What happens if you don\u2019t choose direct deposit for your tax refund?",
+      "model_tag": "b2",
+      "answer": "If you don\u2019t choose direct deposit, your refund will be mailed to you [5eb79f605a0b6fad:0-0].",
+      "latency_ms": 12649.461332999635,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.7058823529411765,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8284628987312317,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6899620145559311,
+        "completeness": 0.8284628987312317,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the process for a device sponsor to seek a review by CMS of the FDA's reevaluation decision?",
+      "model_tag": "b2",
+      "answer": "The device sponsor (e.g., a manufacturer) must submit its request in writing, and must include all materials submitted with its reevaluation request to the FDA [83e1af03c69b5cab:0-0].",
+      "latency_ms": 14180.124749982497,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.3793103448275862,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8613165616989136,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9498272269964216,
+        "completeness": 0.8566492199897766,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the coinsurance amount per day for lifetime reserve days, and under what condition does it apply?",
+      "model_tag": "b2",
+      "answer": "The coinsurance amount for lifetime reserve days is $406 per day [09f5d339ec0a81a0:0-0].",
+      "latency_ms": 14766.599124995992,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.7142857142857143,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.846562385559082,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9462968349456786,
+        "completeness": 0.846562385559082,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What sequence of actions is required to access alternative media preference information during the filing season?",
+      "model_tag": "b2",
+      "answer": "First, create or access your online account at IRS.gov/Account. Then, you can access a variety of information to help you during the filing season, including getting a transcript, reviewing your most recently filed tax return, and getting your adjusted gross income [aab59ecbdba31230:0-0].",
+      "latency_ms": 13674.051790992962,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8043478260869565,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 1.0,
+      "bertscore_f1": 0.88765949010849,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9606808215379714,
+        "completeness": 0.88765949010849,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How does an increase in the number of employees occupying a vehicle affect transit pass eligibility?",
+      "model_tag": "b2",
+      "answer": "If a vehicle seats at least six adults (not including the driver), at least 80% of the vehicle mileage must be for transporting employees between their homes and work place with employees occupying at least one-half the vehicle\u2019s seats (not including the driver\u2019s) [8121baaf9803e2ee:0-0].",
+      "latency_ms": 15167.690417001722,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.3673469387755102,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8575186133384705,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9501315146684646,
+        "completeness": 0.8575186133384705,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Under what condition does the school need to maintain Title IV funds in a separate bank account?",
+      "model_tag": "b2",
+      "answer": "The school must maintain Title IV funds in a separate bank account if the Department requires it [3f6c83411fac5bbf:0-0].",
+      "latency_ms": 13742.555833014194,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8742952346801758,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9560033321380614,
+        "completeness": 0.8742952346801758,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Under what condition can married filing jointly be used after a spouse's death?",
+      "model_tag": "b2",
+      "answer": "Married filing jointly can be used if the spouse died during the year [2691a5ae27cd64e6:0-0].",
+      "latency_ms": 14112.513583007967,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.75,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8489872217178345,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9471455276012419,
+        "completeness": 0.8489872217178345,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Who can claim the American opportunity credit and what is the condition for applying the scholarship to qualified education expenses?",
+      "model_tag": "b2",
+      "answer": "You can claim the American opportunity credit if you paid qualified education expenses for a student in the same year [1acc39f11e1a3eb3:0-0].",
+      "latency_ms": 12816.68845799868,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8695652173913043,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.837017297744751,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9429560542106628,
+        "completeness": 0.837017297744751,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How is the eligibility verified for rolling over amounts as tax-free?",
+      "model_tag": "b2",
+      "answer": "Eligibility is verified by providing a written notice to the recipient that explains the rules regarding such distributions [2691a5ae27cd64e6:0-0].",
+      "latency_ms": 14206.218207982602,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.2857142857142857,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.7963116765022278,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6787090867757797,
+        "completeness": 0.7963116765022278,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Who qualifies for correct proportional share counting without prior year adjustments?",
+      "model_tag": "b2",
+      "answer": "Ms. Smith qualifies for correct proportional share counting without prior year adjustments [ebed794fa03db4ca:1973-2494].",
+      "latency_ms": 13128.752208023798,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5333333333333333,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 1.0,
+      "bertscore_f1": 0.8484196662902832,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9453592509031294,
+        "completeness": 0.8438835740089417,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the specific deadline for the implementation of changes in the ESRD PPS for CY 2015?",
+      "model_tag": "b2",
+      "answer": "The deadline for the implementation of changes in the ESRD PPS for CY 2015 is December 31, 2014 [88176622d3400e8e:0-0].",
+      "latency_ms": 16835.77662499738,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6666666666666666,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9084779024124146,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.967967265844345,
+        "completeness": 0.9084779024124146,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How is eligibility for free tax help verified?",
+      "model_tag": "b2",
+      "answer": "Eligibility for free tax help is verified through the Free File program, which allows you to prepare and file your federal individual income tax return for free using software or Free File Fillable Forms [24a6bcc9aedd5ae0:0-0].",
+      "latency_ms": 13657.971042004647,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5135135135135135,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8441491723060608,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6954522103071212,
+        "completeness": 0.8441491723060608,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How can a study be amended if an error is found?",
+      "model_tag": "b2",
+      "answer": "If the FSAIC confirms that there was a data entry error, it will refer the error to the Department for correction 3 the student does not need to submit a correction. After the data entry error is corrected, the FPS will produce new output documents [19ce71d0894256bc:0-0].",
+      "latency_ms": 14859.887917002197,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.9375,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8042742609977722,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6814959913492202,
+        "completeness": 0.8042742609977722,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How does a consortium agreement limit Title IV funding?",
+      "model_tag": "b2",
+      "answer": "A consortium agreement can be a blanket agreement between two or more eligible schools, or it can be written for a specific student. A student can receive Title IV funds only for courses that apply to his certificate or degree program [3f6c83411fac5bbf:0-0].",
+      "latency_ms": 13046.323040995048,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6590909090909091,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8855435848236084,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9599402546882629,
+        "completeness": 0.8855435848236084,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How does the availability of semiprivate or ward accommodations affect the charge for a private room?",
+      "model_tag": "b2",
+      "answer": "If semiprivate or ward accommodations are available, the provider may not charge the beneficiary a private room differential until those accommodations become available [9633d99276cf27d6:0-0].",
+      "latency_ms": 13733.180833980441,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6538461538461539,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9001637697219849,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9617774233222007,
+        "completeness": 0.8907926380634308,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What sequence of actions is required when a FAFSA Submission Summary or ISIR with a different SAI is received?",
+      "model_tag": "b2",
+      "answer": "First, determine which document is valid. If the new information is correct, use the new FAFSA Submission Summary or ISIR. Recalculate the student\u2019s Pell award for the entire award year based on the new SAI [5914541b4184011a:0-0].",
+      "latency_ms": 14271.789958002046,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.46153846153846156,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9208210110664368,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.7118773192167283,
+        "completeness": 0.8910780549049377,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How is the $30,000 total calculated?",
+      "model_tag": "b2",
+      "answer": "The $30,000 total is calculated by subtracting the ordinary income because of additional depreciation that you do not have to report from the FMV (or cost) of the depreciable real property acquired [5a74c098a3e90056:2660-3473].",
+      "latency_ms": 11838.293333014008,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8451248407363892,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6957936942577362,
+        "completeness": 0.8451248407363892,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the maximum number of days for which payment may be made for inpatient psychiatric hospital services during a patient's lifetime?",
+      "model_tag": "b2",
+      "answer": "Payment may not be made for more than a total of 190 days of inpatient psychiatric hospital services during the patient's lifetime [65c69dd6643df39a:0-0].",
+      "latency_ms": 10707.214666996151,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5384615384615384,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9314982295036316,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9760243803262709,
+        "completeness": 0.9314982295036316,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the overall impact if Kris does not include 85% of social security benefits in taxable income?",
+      "model_tag": "b2",
+      "answer": "Kris must include 85% of social security benefits in taxable income because Kris is married filing separately and lived with Taylor during 2025 [d0a7f59064b17d45:0-0].",
+      "latency_ms": 14392.377790994942,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.7692307692307693,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9049710631370544,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.966739872097969,
+        "completeness": 0.9049710631370544,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the condition for reducing the amount on line 5 of Worksheet 2-10?",
+      "model_tag": "b2",
+      "answer": "Reduce (but not below zero) the amount you otherwise would enter on line 5 of Worksheet 2-10 by your capital gain excess [cfbc21ce7e14128c:0-0].",
+      "latency_ms": 10998.30791700515,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8846153846153846,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.944758951663971,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9806656330823897,
+        "completeness": 0.944758951663971,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How are 2% shareholders of an S corporation and employees treated differently for qualified transportation benefits?",
+      "model_tag": "b2",
+      "answer": "2% shareholders of an S corporation are not treated as employees for qualified transportation benefit purposes [8121baaf9803e2ee:0-0].",
+      "latency_ms": 13689.341124991188,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5789473684210527,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8760905861854553,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9566317051649094,
+        "completeness": 0.8760905861854553,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the maximum contribution amount and under what condition can it be received?",
+      "model_tag": "b2",
+      "answer": "The maximum contribution amount is $7,000 ($8,000 if you are age 50 or older) [9d91fbc5e36db765:0-0].",
+      "latency_ms": 13764.837458002148,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.7894736842105263,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8323336243629456,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.941316768527031,
+        "completeness": 0.8323336243629456,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What distinguishes a mandatory distribution from other types of distributions?",
+      "model_tag": "b2",
+      "answer": "A mandatory distribution is a distribution made without your consent and before you reach age 62 or normal retirement age, whichever is later [24a6bcc9aedd5ae0:0-0].",
+      "latency_ms": 13665.786332974676,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.38461538461538464,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9094847440719604,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.968319660425186,
+        "completeness": 0.9094847440719604,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How do you treat debt incurred to substantially improve your home after October 13, 1987?",
+      "model_tag": "b2",
+      "answer": "You treat debt incurred to substantially improve your home after October 13, 1987, as home acquisition debt [0dd6252f45c2f48b:0-0].",
+      "latency_ms": 13983.131582994247,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.65,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8376612663269043,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9431814432144163,
+        "completeness": 0.8376612663269043,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How do medical services provided by interns and residents differ based on location?",
+      "model_tag": "b2",
+      "answer": "Medical and surgical services provided by interns and residents are covered as provider services when performed within the scope of their training program, regardless of whether the services are performed on or off the provider premises [69d0085029c5fb54:0-0].",
+      "latency_ms": 13388.627417007228,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8461538461538461,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8607807159423828,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9512732505798338,
+        "completeness": 0.8607807159423828,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How many pre-entitlement days are deducted if Alice stays at a Medicare-participating hospital and a non-participating hospital?",
+      "model_tag": "b2",
+      "answer": "30 pre-entitlement days are deducted [65c69dd6643df39a:0-0].",
+      "latency_ms": 12608.8192499883,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.4444444444444444,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8283096551895142,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9399083793163299,
+        "completeness": 0.8283096551895142,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Under what circumstances can additional documentation be omitted?",
+      "model_tag": "b2",
+      "answer": "Additional documentation can be omitted if the record justifies treatment without further explanation [fa0f6acfc2df3f4c:0-0].",
+      "latency_ms": 9798.19754199707,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.375,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.7993393540382385,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6797687739133835,
+        "completeness": 0.7993393540382385,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the condition for entering the amount from another worksheet into column (a)?",
+      "model_tag": "b2",
+      "answer": "If you are using Worksheet 2-8, for column (a) above, use the amount from line 2 or line 3 and enter the result (from column (e)) on line 4 or line 5, as appropriate [cfbc21ce7e14128c:0-0].",
+      "latency_ms": 11100.975249981275,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.9736842105263158,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8612027764320374,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.951420971751213,
+        "completeness": 0.8612027764320374,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the Medicare payment percentage for RHC services, and under what condition is it subject to a payment limit?",
+      "model_tag": "b2",
+      "answer": "Medicare pays 80 percent of the RHC AIR, subject to a payment limit, for medically necessary medical, and qualified preventive, face-to-face (one-on-one) visits with an RHC practitioner [006cc472825b9690:0-0].",
+      "latency_ms": 13139.60412502638,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.4117647058823529,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8769075870513916,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.956917655467987,
+        "completeness": 0.8769075870513916,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What must be true first, then second, and what happens?",
+      "model_tag": "b2",
+      "answer": "First, employees must understand their roles in the internal control system and how their activities relate to others. Second, they must have a means of communicating significant information to those who can affect change [5914541b4184011a:0-0].",
+      "latency_ms": 13270.717124978546,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8918918918918919,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.83705073595047,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6962532132863999,
+        "completeness": 0.8464377522468567,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What happens if a prosthetic device is not covered under the policy?",
+      "model_tag": "b2",
+      "answer": "If a prosthetic device is not covered under the policy, it is not covered [fa0f6acfc2df3f4c:0-0].",
+      "latency_ms": 13774.887749983463,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.7647058823529411,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8619160652160645,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.7016706228256224,
+        "completeness": 0.8619160652160645,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How does a patient's medical condition affect the classification of therapy services?",
+      "model_tag": "b2",
+      "answer": "A patient's particular medical condition is a valid factor in deciding if skilled therapy services are needed [0b8340a48eaf9345:0-0].",
+      "latency_ms": 12940.453542018076,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5714285714285714,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8521168231964111,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9482408881187439,
+        "completeness": 0.8521168231964111,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How can a taxpayer correct an error after filing a return?",
+      "model_tag": "b2",
+      "answer": "A taxpayer can file an amended return to correct the amount of depreciation claimed for any property in any of the following situations: (1) a mathematical error made in any year, (2) a posting error made in any year, or (3) a change in the depreciation method, period of recovery, or convention of a depreciable asset [2691a5ae27cd64e6:0-0].",
+      "latency_ms": 14278.2109999971,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5084745762711864,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8350087404251099,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6922530591487884,
+        "completeness": 0.8350087404251099,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the same about the credit amounts in the two different situations?",
+      "model_tag": "b2",
+      "answer": "The credit amounts are the same for both situations [749f2f9ad2d00110:0-0].",
+      "latency_ms": 17790.06579198176,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8524853587150574,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9483698755502701,
+        "completeness": 0.8524853587150574,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How does the treatment differ for nonqualified plans compared to qualified plans?",
+      "model_tag": "b2",
+      "answer": "Nonqualified plans are not subject to the same rules as qualified plans, and the treatment of distributions from nonqualified plans is different [24a6bcc9aedd5ae0:0-0].",
+      "latency_ms": 11721.207458991557,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.36,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 1.0,
+      "bertscore_f1": 0.859037458896637,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9506631106138228,
+        "completeness": 0.859037458896637,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How does reporting the difference as income interact with the amount of the loss that reduced your tax?",
+      "model_tag": "b2",
+      "answer": "You must report the difference only up to the amount of the loss that reduced your tax [5eb79f605a0b6fad:0-0].",
+      "latency_ms": 13834.120916988468,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8978891372680664,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9642611980438232,
+        "completeness": 0.8978891372680664,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What happens if a student misses the deadline for replacing documents?",
+      "model_tag": "b2",
+      "answer": "If the student misses the deadline, they may not receive Title IV funds for the award period or period of enrollment [19ce71d0894256bc:915-2194].",
+      "latency_ms": 13896.90462499857,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.2916666666666667,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 1.0,
+      "bertscore_f1": 0.8508495092391968,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9477973282337189,
+        "completeness": 0.8508495092391968,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "When is additional information required for frequent ambulance transports, and how is it determined?",
+      "model_tag": "b2",
+      "answer": "Additional information is required for frequent ambulance transports if the A/B MAC (A) or (B) determines that the transportation of the patient is less costly than bringing the service to the patient [28ccd326d255fc59:0-0].",
+      "latency_ms": 12908.81654198165,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5555555555555556,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.869932234287262,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9544762820005417,
+        "completeness": 0.869932234287262,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "When do the child tax credit and credit for other dependents stop being figured?",
+      "model_tag": "b2",
+      "answer": "The child tax credit and credit for other dependents are already figured in Step 3 of Form W-4 or Form W-4P [cfbc21ce7e14128c:8-1568].",
+      "latency_ms": 14267.68141699722,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8846153846153846,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9360755681991577,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9776264488697051,
+        "completeness": 0.9360755681991577,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How does the state authorization requirement interact with the state authorization reciprocity agreement?",
+      "model_tag": "b2",
+      "answer": "If a school offers coursework through distance education or correspondence courses to students in a state in which the school is not physically located or is otherwise subject to that state\u2019s jurisdiction, the school must meet any of the state\u2019s requirements for it to offer postsecondary distance education or correspondence courses there. A school is considered to meet state authorization requirements for distance education or correspondence courses if the state participates in an authorization reciprocity agreement and the school is covered by the agreement (subject to any limitations in the agreement and to any additional requirements the state has that do not relate to authorization of distance education) [3f6c83411fac5bbf:0-0].",
+      "latency_ms": 15515.25858399691,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.7876106194690266,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8814713358879089,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.958514967560768,
+        "completeness": 0.8814713358879089,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How does the rule balance flexibility with standardization?",
+      "model_tag": "b2",
+      "answer": "The rule balances flexibility with standardization by allowing schools to choose between an academic year standard (SAY) or a block-by-block academic year (BBAY 1) for determining loan eligibility, while ensuring that the maximum loan limit for an academic year applies to each BBAY 1 [53506e2c2851d3df:0-0].",
+      "latency_ms": 15089.788624987705,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6326530612244898,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.821202278137207,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6874207973480224,
+        "completeness": 0.821202278137207,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the consequence if a foster child does not live with you for more than half of 2025?",
+      "model_tag": "b2",
+      "answer": "You can\u2019t claim the EIC for a foster child who didn\u2019t live with you for more than half of the year, even if you paid most of the child\u2019s living expenses [749f2f9ad2d00110:0-0].",
+      "latency_ms": 13766.628666984616,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8918918918918919,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.856975257396698,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6999413400888443,
+        "completeness": 0.856975257396698,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What must be true first, then second, and what happens next regarding a change from itemizing to taking the standard deduction?",
+      "model_tag": "b2",
+      "answer": "First, you must have itemized deductions on your federal return. Second, you must find that you should have taken the standard deduction [2691a5ae27cd64e6:0-0].",
+      "latency_ms": 12973.556083015865,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.52,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8607584238052368,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6983793536822,
+        "completeness": 0.8525124390920004,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "When must one report income from Form 1040 or Form 1040A?",
+      "model_tag": "b2",
+      "answer": "You must report all your taxable interest income on Form 1040 or Form 1040A, line 2b [74d7ba3904d19149:0-0].",
+      "latency_ms": 13793.233000003966,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.631578947368421,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8666481971740723,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.7033268690109253,
+        "completeness": 0.8666481971740723,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Under what conditions must a defaulted loan be discharged before bankruptcy to be eligible for discharge?",
+      "model_tag": "b2",
+      "answer": "A borrower who lists a defaulted loan or grant overpayment in an active bankruptcy claim (NSLDS loan status code DO) is not eligible for further Title IV funds unless they provide you with documentation from the holder of the debt stating it is dischargeable [19ce71d0894256bc:0-0].",
+      "latency_ms": 14823.150374984834,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8297872340425532,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8432711362838745,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.945144897699356,
+        "completeness": 0.8432711362838745,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How is the amount treated differently if you are under age 59\u00bd compared to age 59\u00bd or older?",
+      "model_tag": "b2",
+      "answer": "If you are under age 59\u00bd, you must pay a 10% additional tax on the distribution, but if you are age 59\u00bd or older, the 10% additional tax does not apply [d9d0ee1577511bcc:0-0].",
+      "latency_ms": 12935.630124993622,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.7647058823529411,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9044554233551025,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.7165593981742859,
+        "completeness": 0.9044554233551025,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "When must the patient be present during the home environment evaluation visit?",
+      "model_tag": "b2",
+      "answer": "The patient must be present during the home environment evaluation visit, which must be performed by the physical therapist, occupational therapist, or speech-language pathologist, as appropriate [1c0a8d8853d01867:0-0].",
+      "latency_ms": 13869.714500004193,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6333333333333333,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8604331016540527,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9511515855789183,
+        "completeness": 0.8604331016540527,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How is the student's payment for each term calculated under Pell Formula 1?",
+      "model_tag": "b2",
+      "answer": "Under Pell Formula 1, the student's full-time payment for each of the two terms (fall and spring) is $3,502.50. Using the rounding rule stated above, you would round the student's fall payment up to $3,503, and round the spring payment down to $3,502 [22c78bf6698bfc92:0-0].",
+      "latency_ms": 15157.673417008482,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.9811320754716981,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9098849892616272,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9684597462415694,
+        "completeness": 0.9098849892616272,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How are the ACRS percentages determined for 19-year real property?",
+      "model_tag": "b2",
+      "answer": "The ACRS percentages for 19-year real property depend on when you placed the property in service [65b40bba49859022:0-0].",
+      "latency_ms": 14756.509416998597,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.901622474193573,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9655678659677505,
+        "completeness": 0.901622474193573,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What condition must a psychiatric facility meet to avoid reduced Medicare payment?",
+      "model_tag": "b2",
+      "answer": "The psychiatric facility must provide adequate assurances of compliance with the conditions set forth in \u00a7412.22, 482.60, 482.61, and 482.62 [78cb702569992a40:0-0].",
+      "latency_ms": 13991.842165996786,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.48148148148148145,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8254581093788147,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.938910338282585,
+        "completeness": 0.8254581093788147,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Under what condition can a student be considered eligible even if they have not paid tuition?",
+      "model_tag": "b2",
+      "answer": "If the student is charged for the tuition and fees, even if the charge is eventually paid by someone other than the student (e.g., a state, an agency, or an instrumentality of a state, or an eligible educational institution), the student is considered eligible [5987d8f125bfc5ff:2342-2999].",
+      "latency_ms": 14093.427041982068,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.4583333333333333,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8188344836235046,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6865920692682266,
+        "completeness": 0.8188344836235046,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What sequence of actions is required when an individual furnishes speech-language pathology services in a state that does not license speech-language pathologists?",
+      "model_tag": "b2",
+      "answer": "The individual must have successfully completed 350 clock hours of supervised clinical practicum (or is in the process of accumulating supervised clinical experience), performed not less than 9 months of supervised full-time speech-language pathology services after obtaining a master's or doctoral degree in speech-language pathology or a related field, and successfully completed a national examination in speech-language pathology approved by the Secretary [fa0f6acfc2df3f4c:0-0].",
+      "latency_ms": 15165.104874991812,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.4714285714285714,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9490450024604797,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9821657508611679,
+        "completeness": 0.9490450024604797,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What form must be included if the claimed donation exceeds $10,000?",
+      "model_tag": "b2",
+      "answer": "Form 8283-V, Payment Voucher for Filing Fee Under Section 170(f)(13) [cfd84243fe329dd4:0-0]",
+      "latency_ms": 13104.55070802709,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.25,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8789111375808716,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9576188981533049,
+        "completeness": 0.8789111375808716,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Under what threshold are physician services not subject to productivity standards?",
+      "model_tag": "b2",
+      "answer": "Physician services that are provided on a short term or irregular basis under agreements are not subject to the productivity standards [006cc472825b9690:0-0].",
+      "latency_ms": 12966.777000023285,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.4166666666666667,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.922833263874054,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9729916423559188,
+        "completeness": 0.922833263874054,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the overall impact of not signing the return for your spouse as a surviving spouse?",
+      "model_tag": "b2",
+      "answer": "If neither you nor anyone else has been appointed as executor or administrator, you can sign the return for your spouse and enter \u201cFiling as surviving spouse\u201d in the area where you sign the return [2691a5ae27cd64e6:0-0].",
+      "latency_ms": 14419.62416699971,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.631578947368421,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8166930079460144,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6858425527811051,
+        "completeness": 0.8166930079460144,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "When must the hospital make the election effective under the prospective payment system?",
+      "model_tag": "b2",
+      "answer": "The election must be made effective beginning with the first day for which reserve days are available [09f5d339ec0a81a0:0-0].",
+      "latency_ms": 12611.15962502663,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8827767372131348,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9589718580245972,
+        "completeness": 0.8827767372131348,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How does the assay of vitamin B-12 differ from the assay of iron?",
+      "model_tag": "b2",
+      "answer": "The assay of vitamin B-12 is a test to measure the level of vitamin B-12 in the blood, while the assay of iron is a test to measure the level of iron in the blood [88176622d3400e8e:0-0].",
+      "latency_ms": 14582.29366701562,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.45,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8585443496704102,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9504905223846434,
+        "completeness": 0.8585443496704102,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How is a student's eligibility verified when they complete an incomplete portion of a module during the scheduled time for another module?",
+      "model_tag": "b2",
+      "answer": "The student is not considered to be enrolled in the course for Title IV purposes, so attendance of just that course does not count as attendance for purposes of R2T4 requirements [850f0c99d25812a4:0-0].",
+      "latency_ms": 13974.24616702483,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6764705882352942,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8349127769470215,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9422194719314574,
+        "completeness": 0.8349127769470215,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "When is the periodic filing or renewal due, and how should advance preparation be done?",
+      "model_tag": "b2",
+      "answer": "The periodic filing or renewal is due on the 15th day of the 4th month after the end of your fiscal year [286f6a21af2586f3:0-0].",
+      "latency_ms": 13299.607624998316,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.76,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8178160190582275,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6862356066703796,
+        "completeness": 0.8178160190582275,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Under what condition is treatment considered necessary?",
+      "model_tag": "b2",
+      "answer": "Treatment is considered necessary if it is a specific and effective treatment for the patient\u2019s condition [0b8340a48eaf9345:0-0].",
+      "latency_ms": 12928.214584011585,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.7,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8490102887153625,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6971536010503769,
+        "completeness": 0.8490102887153625,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Under what circumstances can't contributions be made to a Coverdell ESA from survivor benefits?",
+      "model_tag": "b2",
+      "answer": "Contributions can't be made to a Coverdell ESA from survivor benefits after the beneficiary reaches age 18, unless the beneficiary is a special needs beneficiary [1acc39f11e1a3eb3:0-0].",
+      "latency_ms": 13424.497083004098,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5862068965517241,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8789086937904358,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9576180428266525,
+        "completeness": 0.8789086937904358,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the penalty for a promoter failing to comply with due diligence requirements for the ERC?",
+      "model_tag": "b2",
+      "answer": "The promoter will be subject to a $1,000 penalty for each failure [74d7ba3904d19149:0-0].",
+      "latency_ms": 14213.885167002445,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.4375,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9094358682632446,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9683025538921355,
+        "completeness": 0.9094358682632446,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How do pre-entitlement days affect the first benefit period?",
+      "model_tag": "b2",
+      "answer": "Pre-entitlement days spent in a psychiatric hospital reduce the 150 inpatient benefit days available in the first benefit period, but not those spent in a general hospital [65c69dd6643df39a:0-0].",
+      "latency_ms": 13402.90041701519,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8709677419354839,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8894870281219482,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9613204598426819,
+        "completeness": 0.8894870281219482,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What records must be maintained and what information do they capture?",
+      "model_tag": "b2",
+      "answer": "A school must maintain comprehensive, accurate program and fiscal records related to its use of Title IV program funds [3f6c83411fac5bbf:0-0].",
+      "latency_ms": 12974.8463339929,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8636363636363636,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8292787075042725,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6902475476264953,
+        "completeness": 0.8292787075042725,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "When is documentation due for determining the medical appropriateness of air ambulance services and how should it be prepared?",
+      "model_tag": "b2",
+      "answer": "Documentation must be submitted to determine the medical appropriateness of air ambulance services [28ccd326d255fc59:0-0].",
+      "latency_ms": 12046.978041995317,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.4375,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8551508188247681,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9493027865886687,
+        "completeness": 0.8551508188247681,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Under what circumstances does the safe harbor apply?",
+      "model_tag": "b2",
+      "answer": "The safe harbor applies if you are subject to a binding contract signed by you and the contractor setting forth the itemized costs to restore your personal-use residential real property to its condition immediately before the casualty [5eb79f605a0b6fad:0-0].",
+      "latency_ms": 13477.725832985016,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.4634146341463415,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8168671131134033,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6859034895896912,
+        "completeness": 0.8168671131134033,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Under what condition does the UEH flag require checking academic records for all prior attended institutions?",
+      "model_tag": "b2",
+      "answer": "The UEH flag requires checking academic records for all prior attended institutions if the student did not earn academic credit at all of the schools previously attended for a relevant award year [19ce71d0894256bc:0-0].",
+      "latency_ms": 13799.999667011434,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6857142857142857,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8996944427490234,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9648930549621582,
+        "completeness": 0.8996944427490234,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the consequence if you fail to file a claim for reimbursement?",
+      "model_tag": "b2",
+      "answer": "If your property is covered by insurance, you should file a timely insurance claim for reimbursement of your loss. If you don\u2019t file an insurance claim, you can\u2019t deduct the full unrecovered amount as a casualty or theft loss and only the part of the loss that isn\u2019t covered by your insurance policy is deductible [5eb79f605a0b6fad:0-0].",
+      "latency_ms": 14742.741666996153,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.9344262295081968,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9182197451591492,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9713769108057022,
+        "completeness": 0.9182197451591492,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "When does Form 2678 not apply to FUTA tax reporting?",
+      "model_tag": "b2",
+      "answer": "Form 2678 doesn\u2019t apply to FUTA taxes reportable on Form 940 unless the employer is a home care service recipient receiving home care services through a program administered by a federal, state, or local government agency [0798b2c75a3c556b:0-0].",
+      "latency_ms": 15049.482833012007,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.9,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 1.0,
+      "bertscore_f1": 0.9534218907356262,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9836976617574691,
+        "completeness": 0.9534218907356262,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the specific deadline for a school to notify a student about FWS funds before making an initial disbursement?",
+      "model_tag": "b2",
+      "answer": "The school must notify the student of the total amount of FWS funds the student is authorized to earn, and how and when the FWS compensation will be paid, before making an initial disbursement [21d49a083f56884d:0-0].",
+      "latency_ms": 14248.326666012872,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8918918918918919,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9217129945755005,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9725995481014251,
+        "completeness": 0.9217129945755005,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How are initial visits and subsequent visits for home infusion therapy services treated differently?",
+      "model_tag": "b2",
+      "answer": "Initial visits are longer or more resource-intensive than subsequent visits, and the payment amounts are set higher for the first visit by the qualified home infusion therapy supplier to initiate home infusion therapy services in the patient's home and lower for subsequent visits [fa0f6acfc2df3f4c:0-0].",
+      "latency_ms": 13424.920374993235,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.4791666666666667,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.838478147983551,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9434673517942427,
+        "completeness": 0.838478147983551,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What percentage of the amount in box 3 is used to calculate the social security tax for an employee?",
+      "model_tag": "b2",
+      "answer": "6.2% of the amount in box 3 is used to calculate the social security tax [0798b2c75a3c556b:0-0].",
+      "latency_ms": 14500.376833981136,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8421052631578947,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9130324721336365,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9695613652467727,
+        "completeness": 0.9130324721336365,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the overall impact if a patient does not follow the first biannual HCPCS coding cycle for DME items?",
+      "model_tag": "b2",
+      "answer": "The overall impact is that the patient will not receive a Medicare DMEPOS benefit category [fa0f6acfc2df3f4c:0-0].",
+      "latency_ms": 13347.302000009222,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.2777777777777778,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8287776708602905,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9400721848011016,
+        "completeness": 0.8287776708602905,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What happens if a parent fails to provide the required spouse or partner's information?",
+      "model_tag": "b2",
+      "answer": "If the parent fails to provide the required spouse or partner's information, the parent spouse or partner will be prompted to enter the spouse or partner's identity information (name, Social Security number, date of birth, and email address) to invite them to contribute to the student's FAFSA form [eb1f80e3e961c87f:0-0].",
+      "latency_ms": 14567.595166998217,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6481481481481481,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8455873727798462,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9446653410792349,
+        "completeness": 0.8419009745121002,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the same about the two situations described?",
+      "model_tag": "b2",
+      "answer": "The stock is of a type that is actively traded, and at least one of the offsetting positions is a position on that stock or substantially similar or related property [74d7ba3904d19149:0-0].",
+      "latency_ms": 14008.224749995861,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8484848484848485,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.7854160070419312,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.674895602464676,
+        "completeness": 0.7854160070419312,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What percentage of indirect expenses can Rene deduct?",
+      "model_tag": "b2",
+      "answer": "Rene can deduct 17.86% of the indirect expenses [580933f121fdc8a2:0-0].",
+      "latency_ms": 14333.563291002065,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.75,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.892166018486023,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9622581064701079,
+        "completeness": 0.892166018486023,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the rate for withholding federal income tax from an employee's pay?",
+      "model_tag": "b2",
+      "answer": "The default withholding rate is 10%, but Form W-4 allows a payee to choose a different rate between 0% and 100% [0798b2c75a3c556b:0-0].",
+      "latency_ms": 14905.7554579922,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.64,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8287035226821899,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6900462329387664,
+        "completeness": 0.8287035226821899,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the tax obligation for the Additional Medicare Tax on employee wages?",
+      "model_tag": "b2",
+      "answer": "The Additional Medicare Tax is only imposed on the employee, with no employer share [8121baaf9803e2ee:0-0].",
+      "latency_ms": 13279.616541985888,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5882352941176471,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8478184938430786,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6967364728450776,
+        "completeness": 0.8478184938430786,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Why won't CMS consider information not submitted to the FDA in its review?",
+      "model_tag": "b2",
+      "answer": "CMS will not review information not submitted to the FDA for its consideration [83e1af03c69b5cab:0-0].",
+      "latency_ms": 13264.700125000672,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.625,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8658403754234314,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.953044131398201,
+        "completeness": 0.8658403754234314,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "When can the second disbursements of the second Pell Grant and Direct Loan be made?",
+      "model_tag": "b2",
+      "answer": "The second disbursements of the second Pell Grant award and the Direct Loan for the second academic year of the program cannot be made until the student officially enters the 4th scheduled payment period, which occurs after the student has cumulatively completed 39 semester hours and 45 weeks [5987d8f125bfc5ff:0-0].",
+      "latency_ms": 14545.003457984421,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.8431372549019608,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 1.0,
+      "bertscore_f1": 0.9298447966575623,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9754456788301467,
+        "completeness": 0.9298447966575623,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How does the policy balance the interests of U.S. citizens born abroad versus administrative simplicity?",
+      "model_tag": "b2",
+      "answer": "The policy balances the interests of U.S. citizens born abroad by requiring them to provide proof of U.S. citizenship, while also recognizing that administrative simplicity is important [19ce71d0894256bc:0-0].",
+      "latency_ms": 11038.047541980632,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.4375,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8524534702301025,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9483587145805359,
+        "completeness": 0.8524534702301025,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "Under what circumstances may disbursements not appear on the September SAS?",
+      "model_tag": "b2",
+      "answer": "Disbursements may not appear on the September SAS if the business office draws down and disburses loan funds to the student in late September, but the financial aid office doesn\u2019t send the actual disbursement records for those loans until the beginning of October [5914541b4184011a:0-0].",
+      "latency_ms": 27603.411916992627,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.574468085106383,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.9177957773208618,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9712285220623016,
+        "completeness": 0.9177957773208618,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What must be true first, then second, and what happens next regarding the Form W-4?",
+      "model_tag": "b2",
+      "answer": "First, you must have a job(s) [cfbc21ce7e14128c:0-0]. Second, you must give your employer your revised Form W-4P [cfbc21ce7e14128c:0-0]. Next, your employer must put your new Form W-4 into effect no later than the start of the first payroll period and/or your spouse) have a job(s), fect unless you submit a new Form W-4P [cfbc21ce7e14128c:0-0].",
+      "latency_ms": 27399.730959004955,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5303030303030303,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8401384353637695,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9440484523773192,
+        "completeness": 0.8401384353637695,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "How did the treatment of intersessions change between standard and nonstandard terms?",
+      "model_tag": "b2",
+      "answer": "The treatment of intersessions changed between standard and nonstandard terms. For academic programs offered in standard terms, a short nonstandard term (often called an \u201cintersession\u201d) may be combined with a preceding or following standard term and considered to be a single standard term [5987d8f125bfc5ff:0-0].",
+      "latency_ms": 25486.249959009,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.6304347826086957,
+      "citation_f1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.84847092628479,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.6963468819856644,
+        "completeness": 0.8467053771018982,
+        "citation_coverage": 0.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    },
+    {
+      "query": "What is the net result if a married filing jointly couple is covered by an employer plan and their modified AGI is $130,000?",
+      "model_tag": "b2",
+      "answer": "The net result is that their IRA contributions are not deductible [9d91fbc5e36db765:0-0].",
+      "latency_ms": 28809.578499989584,
+      "ttft_ms": null,
+      "cgal_iterations": 0,
+      "confidence": 0.0,
+      "grounding": 0.5714285714285714,
+      "citation_f1": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.821438193321228,
+      "tool_accuracy": {
+        "name_match": 1.0,
+        "arg_f1": 1.0
+      },
+      "fcrs": {
+        "fcrs": 0.9375033676624298,
+        "completeness": 0.821438193321228,
+        "citation_coverage": 1.0,
+        "tool_appropriateness": 1.0,
+        "escalation_accuracy": 1.0
+      }
+    }
+  ],
+  "aggregate": {
+    "grounding": 0.6217445639970309,
+    "citation_f1": 0.673469387755102,
+    "citation_precision": 0.673469387755102,
+    "citation_recall": 0.673469387755102,
+    "bertscore_f1": 0.8675450342042106,
+    "recall_at_20": 0.07142857142857142,
+    "tool_name_match": 1.0,
+    "tool_arg_f1": 1.0,
+    "fcrs": 0.8793890624427471,
+    "completeness": 0.8667675836556622,
+    "citation_coverage": 0.7040816326530612,
+    "tool_appropriateness": 1.0,
+    "escalation_accuracy_per_query": 1.0,
+    "latency_p50": 13851.91770849633,
+    "latency_p95": 16978.92000004503,
+    "latency_mean": 14340.68432062085,
+    "cgal_efficiency": 0.0,
+    "escalation_f1": 0.0
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "per_model": {
+    "b2": {
+      "grounding": 0.6217445639970309,
+      "citation_f1": 0.673469387755102,
+      "citation_precision": 0.673469387755102,
+      "citation_recall": 0.673469387755102,
+      "bertscore_f1": 0.8675450342042106,
+      "recall_at_20": 0.07142857142857142,
+      "tool_name_match": 1.0,
+      "tool_arg_f1": 1.0,
+      "fcrs": 0.8793890624427471,
+      "completeness": 0.8667675836556622,
+      "citation_coverage": 0.7040816326530612,
+      "tool_appropriateness": 1.0,
+      "escalation_accuracy_per_query": 1.0,
+      "latency_p50": 13851.91770849633,
+      "latency_p95": 16978.92000004503,
+      "latency_mean": 14340.68432062085,
+      "cgal_efficiency": 0.0,
+      "escalation_f1": 0.0
+    }
+  },
+  "bootstrap_p_values_vs_reference": {},
+  "significance_flag_alpha_0.05": {}
+}
