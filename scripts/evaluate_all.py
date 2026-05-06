@@ -7,6 +7,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import logging
 import os
@@ -35,6 +36,37 @@ def _build_pipeline(tag: str, cfg):
     return M5Pipeline.from_tag(tag, cfg)
 
 
+def _free_pipeline(pipeline) -> None:
+    """Release model weights and reclaim memory before loading the next model."""
+    try:
+        import torch
+        # Walk common attribute names that hold large tensors.
+        for attr in ("generator", "vector_store", "reranker", "confidence_head",
+                     "alpha_network", "_model", "_llama", "model", "engine"):
+            obj = getattr(pipeline, attr, None)
+            if obj is None:
+                continue
+            # Recurse one level for nested components (e.g. pipeline.generator._model).
+            for inner in ("_model", "_llama", "model"):
+                inner_obj = getattr(obj, inner, None)
+                if inner_obj is not None:
+                    try:
+                        inner_obj.cpu()
+                    except Exception:
+                        pass
+                    setattr(obj, inner, None)
+            try:
+                obj.cpu()
+            except Exception:
+                pass
+            setattr(pipeline, attr, None)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+    gc.collect()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--test-dir", default="data/test")
@@ -45,22 +77,39 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
     cfg = get_config()
 
+    tags = [t.strip().lower() for t in args.models.split(",") if t.strip()]
     evaluator = Evaluator(Path(args.test_dir), Path(args.output_dir))
-    pipelines = {}
-    for tag in args.models.split(","):
-        tag = tag.strip().lower()
-        if not tag:
-            continue
+
+    # Evaluate one model at a time to avoid holding all weights in memory.
+    aggregate_results: dict[str, dict] = {}
+    for tag in tags:
+        logging.info("=== Loading model: %s ===", tag)
         try:
-            pipelines[tag] = _build_pipeline(tag, cfg)
+            pipeline = _build_pipeline(tag, cfg)
         except Exception as exc:
             logging.warning("Failed to build %s: %s", tag, exc)
+            continue
 
-    results = evaluator.evaluate_all(pipelines)
+        try:
+            res = evaluator.evaluate(tag, pipeline)
+            aggregate_results[tag] = res["aggregate"]
+            # Save per-model result immediately so progress is not lost on crash.
+            per_model_path = Path(args.output_dir) / f"{tag}.json"
+            per_model_path.parent.mkdir(parents=True, exist_ok=True)
+            with per_model_path.open("w", encoding="utf-8") as f:
+                json.dump(res, f, indent=2, default=str)
+            logging.info("Saved %s results to %s", tag, per_model_path)
+        except Exception as exc:
+            logging.warning("Evaluation failed for %s: %s", tag, exc)
+        finally:
+            logging.info("Freeing memory for %s ...", tag)
+            _free_pipeline(pipeline)
+            del pipeline
+
     out_path = Path(args.output_dir) / "all_results.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, default=str)
+        json.dump(aggregate_results, f, indent=2, default=str)
     logging.info("Wrote %s", out_path)
 
     generate_report(out_path, Path(args.output_dir))

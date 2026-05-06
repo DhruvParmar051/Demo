@@ -7,6 +7,7 @@ comparison report via :mod:`src.evaluation.report`.
 
 from __future__ import annotations
 
+import gc
 import logging
 from pathlib import Path
 from typing import Any
@@ -89,21 +90,32 @@ def run_evaluation(
     test_path = _resolve_test_set_path(test_dir)
     evaluator = Evaluator(test_set_path=test_path, output_dir=output_dir)
 
-    pipelines: dict[str, Any] = {}
+    summary: dict[str, Any] = {}
+
+    # Evaluate one model at a time — loading all 8 simultaneously exhausts RAM.
     for tag in models:
+        logger.info("=== Loading model: %s ===", tag)
         try:
-            # Always pass None so _build_pipeline uses get_config() internally
-            # and receives a proper AegisConfig object (not a raw YAML dict).
             pipe_obj = _build_pipeline(tag, None)
-            pipelines[tag] = _pipeline_callable(pipe_obj)
+            callable_pipe = _pipeline_callable(pipe_obj)
         except Exception as exc:
             logger.exception("Failed to build pipeline for %s: %s", tag, exc)
+            continue
 
-    if not pipelines:
-        logger.error("No pipelines could be built; evaluation aborted")
+        try:
+            res = evaluator.evaluate(tag, callable_pipe)
+            summary[tag] = res["aggregate"]
+        except Exception as exc:
+            logger.warning("Evaluation failed for %s: %s", tag, exc)
+        finally:
+            # Release model weights before loading the next pipeline.
+            _free_pipeline(pipe_obj)
+            del pipe_obj, callable_pipe
+            gc.collect()
+
+    if not summary:
+        logger.error("No models were successfully evaluated")
         return {}
-
-    summary = evaluator.evaluate_all(pipelines)
 
     # Generate human-readable comparison artifacts (markdown + figs).
     try:
@@ -116,3 +128,31 @@ def run_evaluation(
         logger.warning("Report generation failed: %s", exc)
 
     return summary
+
+
+def _free_pipeline(pipeline: Any) -> None:
+    """Release model weights so the next pipeline can load without OOM."""
+    try:
+        import torch
+        for attr in ("generator", "vector_store", "reranker", "confidence_head",
+                     "alpha_network", "_model", "_llama", "model", "engine"):
+            obj = getattr(pipeline, attr, None)
+            if obj is None:
+                continue
+            for inner in ("_model", "_llama", "model"):
+                inner_obj = getattr(obj, inner, None)
+                if inner_obj is not None:
+                    try:
+                        inner_obj.cpu()
+                    except Exception:
+                        pass
+                    setattr(obj, inner, None)
+            try:
+                obj.cpu()
+            except Exception:
+                pass
+            setattr(pipeline, attr, None)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
