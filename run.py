@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
@@ -27,6 +28,11 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 from loguru import logger
+
+# Silence noisy third-party warnings before any HF imports.
+os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +86,7 @@ def cmd_ingest(args: argparse.Namespace, cfg: dict) -> None:
     vector_db_path = args.vector_db_path or cfg["data"]["vector_db_path"]
     bm25_index_path = cfg["data"]["bm25_index_path"]
 
-    logger.info("Ingesting documents from %s", source_dir)
+    logger.info("Ingesting documents from {}", source_dir)
     run_ingestion(
         source_dir=source_dir,
         vector_db_path=vector_db_path,
@@ -104,10 +110,10 @@ def cmd_generate_data(args: argparse.Namespace, cfg: dict) -> None:
 
     valid_types = {"qa", "preference", "confidence", "alpha", "decomp", "all"}
     if data_type not in valid_types:
-        logger.error("Invalid data type '%s'. Must be one of: %s", data_type, valid_types)
+        logger.error("Invalid data type '{}'. Must be one of: {}", data_type, valid_types)
         sys.exit(1)
 
-    logger.info("Generating synthetic data: type=%s, output=%s", data_type, output_dir)
+    logger.info("Generating synthetic data: type={}, output={}", data_type, output_dir)
     run_data_generation(
         data_type=data_type,
         output_dir=output_dir,
@@ -126,12 +132,12 @@ def cmd_train(args: argparse.Namespace, cfg: dict) -> None:
         "confidence", "alpha", "decomposer", "all",
     }
     if component not in valid_components:
-        logger.error("Invalid component '%s'. Must be one of: %s", component, valid_components)
+        logger.error("Invalid component '{}'. Must be one of: {}", component, valid_components)
         sys.exit(1)
 
-    logger.info("Training component: %s", component)
+    logger.info("Training component: {}", component)
     run_training(component=component, config=cfg)
-    logger.info("Training complete for: %s", component)
+    logger.info("Training complete for: {}", component)
 
 
 def cmd_evaluate(args: argparse.Namespace, cfg: dict) -> None:
@@ -143,7 +149,7 @@ def cmd_evaluate(args: argparse.Namespace, cfg: dict) -> None:
     test_path = getattr(args, "test_file", None) or args.test_dir or "data/test"
     output_dir = args.output_dir or "report"
 
-    logger.info("Evaluating models: %s", models)
+    logger.info("Evaluating models: {}", ", ".join(models))
     run_evaluation(
         models=models,
         test_dir=test_path,
@@ -161,7 +167,7 @@ def cmd_serve(args: argparse.Namespace, cfg: dict) -> None:
     port = args.port or cfg["serving"]["port"]
     model_tag = args.model
 
-    logger.info("Starting server on %s:%s with model config '%s'", host, port, model_tag)
+    logger.info("Starting server on {}:{} with model config '{}'", host, port, model_tag)
     app = create_app(model_tag=model_tag, config=None)
 
     import uvicorn
@@ -187,7 +193,7 @@ def cmd_query(args: argparse.Namespace, cfg: dict) -> None:
         logger.error("--query is required.")
         sys.exit(1)
 
-    logger.info("Querying model '%s': %s...", model_tag, query_text[:80])
+    logger.info("Querying model '{}': {}...", model_tag, query_text[:80])
     result = query_model(
         model_tag=model_tag,
         query=query_text,

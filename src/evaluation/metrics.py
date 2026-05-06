@@ -202,7 +202,9 @@ def _get_bertscorer() -> Any:
         from bert_score import BERTScorer
         import inspect as _inspect
         import logging
-        logging.getLogger("bert_score").setLevel(logging.ERROR)
+        # Suppress bert_score's verbose load reports (UNEXPECTED/MISSING key tables).
+        for _noisy in ("bert_score", "transformers.modeling_utils"):
+            logging.getLogger(_noisy).setLevel(logging.ERROR)
         _sig = _inspect.signature(BERTScorer.__init__)
         _kwargs: dict[str, Any] = {"lang": "en", "rescale_with_baseline": False}
         if "verbose" in _sig.parameters:

@@ -60,11 +60,19 @@ class ChromaVectorStore:
         logger.info(
             "Loading embedding model %s on %s", embedding_model_name, device
         )
+        import logging as _logging
+        import os as _os
+        # Suppress noisy HF Hub auth warning and sentence-transformers shard warning.
+        _os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
+        _logging.getLogger("sentence_transformers").setLevel(_logging.ERROR)
+        _logging.getLogger("huggingface_hub").setLevel(_logging.ERROR)
         self.model = SentenceTransformer(
             embedding_model_name,
             device=device,
             trust_remote_code=True,
         )
+        _logging.getLogger("sentence_transformers").setLevel(_logging.WARNING)
+        _logging.getLogger("huggingface_hub").setLevel(_logging.WARNING)
 
         # ----- ChromaDB client ------------------------------------------------
         import time as _time
