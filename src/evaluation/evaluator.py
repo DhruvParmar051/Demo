@@ -230,12 +230,8 @@ class Evaluator:
 
             if needed_tool:
                 row["tool_accuracy"] = tool_accuracy(response.tool_calls, needed_tool)
-            elif response.tool_calls:
-                # No tool was required but the model called one anyway — false positive.
-                row["tool_accuracy"] = {"name_match": 0.0, "arg_f1": 0.0}
             else:
-                # Correct: no tool needed and none was called.
-                row["tool_accuracy"] = {"name_match": 1.0, "arg_f1": 1.0}
+                row["tool_accuracy"] = None
 
             # Enrich gold dict with fields FCRS needs but test set omits.
             gold_doc_ids = [
@@ -288,12 +284,12 @@ class Evaluator:
         aggregate["recall_at_20"] = self._nan_mean(
             [r["recall_at_20"] for r in per_query]
         )
-        aggregate["tool_name_match"] = self._nan_mean(
-            [r["tool_accuracy"]["name_match"] for r in per_query]
-        )
-        aggregate["tool_arg_f1"] = self._nan_mean(
-            [r["tool_accuracy"]["arg_f1"] for r in per_query]
-        )
+        tool_name_vals = [r["tool_accuracy"]["name_match"] for r in per_query if r.get("tool_accuracy")]
+        if tool_name_vals:
+            aggregate["tool_name_match"] = self._nan_mean(tool_name_vals)
+        tool_arg_vals = [r["tool_accuracy"]["arg_f1"] for r in per_query if r.get("tool_accuracy")]
+        if tool_arg_vals:
+            aggregate["tool_arg_f1"] = self._nan_mean(tool_arg_vals)
         aggregate["fcrs"] = self._nan_mean([r["fcrs"]["fcrs"] for r in per_query])
         aggregate["completeness"] = self._nan_mean(
             [r["fcrs"]["completeness"] for r in per_query]
@@ -328,7 +324,7 @@ class Evaluator:
         ]
         aggregate["cgal_efficiency"] = cgal_efficiency(dummy_responses)
 
-        if pred_escalated:
+        if pred_escalated and any(gold_escalated):
             aggregate["escalation_f1"] = escalation_f1(
                 pred_escalated, gold_escalated
             )["f1"]

@@ -63,9 +63,9 @@ retrieval:
 # ---------------------------------------------------------------------------
 cgal:
   max_iterations: 3
-  high_confidence: 0.55   # lowered: confidence head trained on 500 pairs outputs ~0.4-0.7
-  medium_confidence: 0.30  # lowered: confidence head outputs ~0.32 in practice
-  low_confidence: 0.20     # lowered: retry before escalating
+  high_confidence: 0.35   # head outputs 0.24-0.34; above this = answer without verify
+  medium_confidence: 0.22  # above this = answer with verify; covers full observed range
+  low_confidence: 0.10     # below this = escalate immediately; else retry
   # below low_confidence: escalate / return "I don't know"
   verify_low: 0.50         # lowered: NLI entailment threshold
   verify_high: 0.65        # lowered: high-confidence NLI accept
