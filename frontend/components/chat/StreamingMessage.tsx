@@ -3,6 +3,8 @@
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useTheme } from "next-themes";
 import type { Citation } from "@/lib/types";
 import { CitationCard } from "./CitationCard";
 
@@ -12,14 +14,10 @@ interface StreamingMessageProps {
   isStreaming: boolean;
 }
 
-// Inject citation refs inline after relevant sentences
-function injectCitationMarkers(text: string, citations: Citation[]): string {
-  if (!citations.length) return text;
-  // Simple approach: append all citation refs at the end of the answer
-  return text;
-}
-
 export function StreamingMessage({ content, citations, isStreaming }: StreamingMessageProps) {
+  const { theme } = useTheme();
+  const isDark = theme !== "light";
+
   if (!content && isStreaming) {
     return (
       <div className="flex items-center gap-1.5 py-1">
@@ -27,10 +25,7 @@ export function StreamingMessage({ content, citations, isStreaming }: StreamingM
           <span
             key={i}
             className="w-1.5 h-1.5 rounded-full bg-accent/60"
-            style={{
-              animation: "typing 1.2s steps(1) infinite",
-              animationDelay: `${i * 0.2}s`,
-            }}
+            style={{ animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }}
           />
         ))}
       </div>
@@ -42,19 +37,19 @@ export function StreamingMessage({ content, citations, isStreaming }: StreamingM
       <div className="prose prose-sm max-w-none">
         <ReactMarkdown
           components={{
-            code({ node, className, children, ...props }) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            code({ className, children, ...props }: any) {
               const match = /language-(\w+)/.exec(className || "");
-              const isBlock = !!match;
-              if (isBlock) {
+              if (match) {
                 return (
                   <SyntaxHighlighter
-                    style={oneDark as Record<string, React.CSSProperties>}
+                    style={(isDark ? oneDark : oneLight) as Record<string, React.CSSProperties>}
                     language={match[1]}
                     PreTag="div"
                     customStyle={{
-                      background: "#0d0d15",
+                      background: isDark ? "#0d0d15" : "#f6f7f9",
                       borderRadius: "12px",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      border: `1px solid var(--glass-border)`,
                       fontSize: "0.8rem",
                       margin: "0.75rem 0",
                     }}
@@ -71,10 +66,9 @@ export function StreamingMessage({ content, citations, isStreaming }: StreamingM
         </ReactMarkdown>
       </div>
 
-      {/* Citation inline refs */}
       {citations.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1 mt-2 pt-2 border-t border-white/[0.06]">
-          <span className="text-xs text-muted mr-1">Sources:</span>
+        <div className="flex flex-wrap items-center gap-1 mt-2 pt-2 border-t border-[var(--glass-border)]">
+          <span className="text-xs text-[var(--muted)] mr-1">Sources:</span>
           {citations.map((c, i) => (
             <CitationCard key={c.chunk_id || i} citation={c} index={i} />
           ))}

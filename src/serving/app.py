@@ -124,8 +124,14 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:8501", "http://localhost:3000",
-                       "http://localhost"],
+        allow_origins=[
+            "http://localhost:3000",   # Next.js dev
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://localhost",
+            "http://192.168.29.236:3000",  # LAN access
+        ],
+        allow_origin_regex=r"http://localhost:\d+",  # any local port
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
