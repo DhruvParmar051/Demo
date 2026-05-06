@@ -20,20 +20,33 @@ export default function ChatPage() {
     const stored = typeof window !== "undefined" ? localStorage.getItem("aegis_collection_id") : null;
     if (stored) setCollectionId(stored);
 
-    getHealth()
-      .then(() => setIsConnected(true))
-      .catch(() => setIsConnected(false));
+    const check = () =>
+      getHealth()
+        .then(() => setIsConnected(true))
+        .catch(() => setIsConnected(false));
+
+    check();
+    const id = setInterval(check, 30_000);
+    return () => clearInterval(id);
   }, []);
+
+  const handleCollectionChange = (id: string) => {
+    setCollectionId(id);
+    if (typeof window !== "undefined") localStorage.setItem("aegis_collection_id", id);
+  };
 
   const handleSend = (query: string) => {
     sendMessage(query, modelTag, searchMode, collectionId || undefined);
   };
 
   return (
-    <div className="flex h-full" style={{ background: "#0a0a0f" }}>
+    <div
+      className="flex h-full w-full"
+      style={{ background: "var(--page-bg)" }}
+    >
       <Sidebar onNewChat={clearMessages} />
 
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
         <TopBar
           title="Chat"
           modelTag={modelTag}
@@ -43,16 +56,18 @@ export default function ChatPage() {
           isConnected={isConnected}
         />
 
-        <div className="flex-1 flex flex-col min-h-0">
-          <ChatWindow messages={messages} />
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <ChatWindow messages={messages} onSuggestion={handleSend} />
           <InputBar
             onSend={handleSend}
             onStop={stopStreaming}
             isStreaming={status === "streaming"}
-            disabled={!isConnected}
+            disabled={false}
+            collectionId={collectionId}
+            onCollectionChange={handleCollectionChange}
             placeholder={
               searchMode === "user_docs" && !collectionId
-                ? "Upload documents first to use My Docs mode…"
+                ? "Upload a document first using (+), then switch to My Docs…"
                 : undefined
             }
           />

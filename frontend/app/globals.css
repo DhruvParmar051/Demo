@@ -1,102 +1,174 @@
 @import "tailwindcss";
 
-/* ── Tailwind v4 theme tokens ───────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────
+   Tailwind v4 theme tokens
+───────────────────────────────────────────────────────────────────────── */
 @theme {
-  --color-background: #0a0a0f;
-  --color-surface:    #111118;
-  --color-surface-2:  #1a1a24;
-  --color-accent:     #6366f1;
-  --color-accent-2:   #8b5cf6;
-  --color-accent-3:   #a78bfa;
-  --color-muted:      #64748b;
-  --color-muted-2:    #94a3b8;
-  --color-success:    #10b981;
-  --color-warning:    #f59e0b;
-  --color-danger:     #ef4444;
+  /* Semantic tokens (resolved per-theme via CSS vars below) */
+  --color-background:   var(--bg);
+  --color-surface:      var(--surface);
+  --color-surface-2:    var(--surface-2);
+  --color-border:       var(--border);
+  --color-foreground:   var(--fg);
+  --color-muted:        var(--muted);
+  --color-muted-2:      var(--muted-2);
 
+  /* Brand — constant across themes */
+  --color-accent:       #6366f1;
+  --color-accent-2:     #8b5cf6;
+  --color-accent-3:     #a78bfa;
+  --color-success:      #10b981;
+  --color-warning:      #f59e0b;
+  --color-danger:       #ef4444;
+
+  /* Typography */
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
+  /* Shadows */
   --shadow-glow:    0 0 30px rgba(99,102,241,0.15);
   --shadow-glow-sm: 0 0 12px rgba(99,102,241,0.2);
   --shadow-glass:   0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
 
+  /* Animations */
   --animate-fade-in:       fadeIn 0.3s ease-out;
   --animate-slide-up:      slideUp 0.3s ease-out;
   --animate-slide-in-left: slideInLeft 0.3s ease-out;
   --animate-shimmer:       shimmer 1.5s infinite;
-  --animate-pulse-slow:    pulse 3s cubic-bezier(0.4,0,0.6,1) infinite;
-
-  --radius-2xl: 16px;
-  --radius-3xl: 24px;
 }
 
-/* ── Keyframes ──────────────────────────────────────────────────────────── */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-16px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-@keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
+/* ─────────────────────────────────────────────────────────────────────────
+   Dark theme (default)
+───────────────────────────────────────────────────────────────────────── */
+:root, .dark {
+  --bg:        #0a0a0f;
+  --surface:   #111118;
+  --surface-2: #1a1a24;
+  --border:    rgba(255,255,255,0.08);
+  --fg:        #f1f5f9;
+  --muted:     #64748b;
+  --muted-2:   #94a3b8;
+
+  --glass-bg:     rgba(255,255,255,0.04);
+  --glass-border: rgba(255,255,255,0.08);
+  --glass-hover:  rgba(255,255,255,0.07);
+  --glass-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+
+  --input-bg:     rgba(255,255,255,0.04);
+  --input-border: rgba(255,255,255,0.1);
+
+  --sidebar-bg:   rgba(10,10,18,0.97);
+  --topbar-bg:    rgba(10,10,18,0.85);
+  --page-bg:      #0a0a0f;
+  --bubble-user:  rgba(99,102,241,0.12);
+  --bubble-ai:    rgba(255,255,255,0.04);
+  --scrollbar:    rgba(255,255,255,0.1);
+  --scrollbar-h:  rgba(255,255,255,0.2);
+  --kbd:          rgba(255,255,255,0.06);
+  color-scheme: dark;
 }
 
-/* ── Base ────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────
+   Light theme
+───────────────────────────────────────────────────────────────────────── */
+.light {
+  --bg:        #f8f9fc;
+  --surface:   #ffffff;
+  --surface-2: #f1f3f7;
+  --border:    rgba(0,0,0,0.08);
+  --fg:        #0f172a;
+  --muted:     #64748b;
+  --muted-2:   #475569;
+
+  --glass-bg:     rgba(255,255,255,0.7);
+  --glass-border: rgba(0,0,0,0.08);
+  --glass-hover:  rgba(255,255,255,0.9);
+  --glass-shadow: 0 4px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
+
+  --input-bg:     rgba(0,0,0,0.03);
+  --input-border: rgba(0,0,0,0.1);
+
+  --sidebar-bg:   rgba(248,249,252,0.97);
+  --topbar-bg:    rgba(255,255,255,0.85);
+  --page-bg:      #f8f9fc;
+  --bubble-user:  rgba(99,102,241,0.08);
+  --bubble-ai:    rgba(255,255,255,0.8);
+  --scrollbar:    rgba(0,0,0,0.1);
+  --scrollbar-h:  rgba(0,0,0,0.2);
+  --kbd:          rgba(0,0,0,0.06);
+  color-scheme: light;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Keyframes
+───────────────────────────────────────────────────────────────────────── */
+@keyframes fadeIn      { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideUp     { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes slideInLeft { from { opacity: 0; transform: translateX(-16px) } to { opacity: 1; transform: translateX(0) } }
+@keyframes shimmer     { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Base reset
+───────────────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
-
-html, body {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-}
+html, body { height: 100%; margin: 0; padding: 0; }
 
 body {
-  background-color: #0a0a0f;
-  color: #f1f5f9;
+  background-color: var(--page-bg);
+  color: var(--fg);
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Theme transition on all elements */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
+}
+/* But don't transition transforms/opacity (kills animations) */
+.no-theme-transition, .no-theme-transition * {
+  transition: none !important;
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-h); }
 
-/* ── Utility classes ─────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────
+   Utility classes
+───────────────────────────────────────────────────────────────────────── */
 @utility glass {
-  background: rgba(255,255,255,0.04);
+  background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
 }
 
 @utility glass-card {
-  background: rgba(255,255,255,0.04);
+  background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
   border-radius: 16px;
 }
 
 @utility glass-hover {
-  background: rgba(255,255,255,0.04);
+  background: var(--glass-bg);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.08);
-  transition: background 0.2s, border-color 0.2s;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  cursor: pointer;
   &:hover {
-    background: rgba(255,255,255,0.07);
-    border-color: rgba(255,255,255,0.12);
+    background: var(--glass-hover);
+    border-color: rgba(99,102,241,0.2);
+    box-shadow: 0 4px 16px rgba(99,102,241,0.08);
   }
 }
 
@@ -108,12 +180,7 @@ body {
 }
 
 @utility shimmer-bg {
-  background: linear-gradient(
-    90deg,
-    rgba(255,255,255,0.03) 25%,
-    rgba(255,255,255,0.08) 50%,
-    rgba(255,255,255,0.03) 75%
-  );
+  background: linear-gradient(90deg, rgba(128,128,128,0.05) 25%, rgba(128,128,128,0.12) 50%, rgba(128,128,128,0.05) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -124,41 +191,32 @@ body {
   &::-webkit-scrollbar { display: none; }
 }
 
-/* ── Markdown prose ───────────────────────────────────────────────────────── */
-.prose { color: #f1f5f9; max-width: none; }
-.prose h1, .prose h2, .prose h3, .prose h4 { color: #f8fafc; font-weight: 600; margin-top: 1.2em; margin-bottom: 0.5em; }
+/* ─────────────────────────────────────────────────────────────────────────
+   Markdown prose — theme-aware
+───────────────────────────────────────────────────────────────────────── */
+.prose { color: var(--fg); max-width: none; }
+.prose h1, .prose h2, .prose h3, .prose h4 { color: var(--fg); font-weight: 600; margin-top: 1.2em; margin-bottom: 0.5em; }
 .prose p { line-height: 1.7; margin-bottom: 0.75em; }
-.prose strong { color: #f8fafc; }
+.prose strong { color: var(--fg); }
 .prose code {
-  background: rgba(99,102,241,0.12);
+  background: rgba(99,102,241,0.1);
   border: 1px solid rgba(99,102,241,0.2);
   border-radius: 4px;
   padding: 0.1em 0.4em;
   font-size: 0.875em;
-  color: #a78bfa;
+  color: #7c3aed;
   font-family: 'JetBrains Mono', monospace;
 }
-.prose pre {
-  background: #0d0d15 !important;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px;
-  overflow-x: auto;
-}
+.dark .prose code { color: #a78bfa; }
+.prose pre { background: var(--surface) !important; border: 1px solid var(--glass-border); border-radius: 12px; overflow-x: auto; }
 .prose pre code { background: none; border: none; padding: 0; color: inherit; }
-.prose a { color: #818cf8; text-decoration: none; }
-.prose a:hover { color: #a5b4fc; text-decoration: underline; }
-.prose blockquote {
-  border-left: 3px solid #6366f1;
-  background: rgba(99,102,241,0.05);
-  border-radius: 0 8px 8px 0;
-  color: #94a3b8;
-  padding: 0.5em 1em;
-  margin: 0.75em 0;
-}
+.prose a { color: #6366f1; text-decoration: none; }
+.prose a:hover { color: #4f46e5; text-decoration: underline; }
+.prose blockquote { border-left: 3px solid #6366f1; background: rgba(99,102,241,0.05); border-radius: 0 8px 8px 0; color: var(--muted-2); padding: 0.5em 1em; margin: 0.75em 0; }
 .prose ul { list-style: disc; padding-left: 1.5em; }
 .prose ol { list-style: decimal; padding-left: 1.5em; }
 .prose li { margin-bottom: 0.25em; }
-.prose hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 1.5em 0; }
+.prose hr { border: none; border-top: 1px solid var(--glass-border); margin: 1.5em 0; }
 .prose table { width: 100%; border-collapse: collapse; }
-.prose th { text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 0.5em 0.75em; color: #f1f5f9; font-weight: 600; }
-.prose td { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 0.5em 0.75em; color: #cbd5e1; }
+.prose th { text-align: left; border-bottom: 1px solid var(--glass-border); padding: 0.5em 0.75em; font-weight: 600; }
+.prose td { border-bottom: 1px solid var(--glass-border); padding: 0.5em 0.75em; color: var(--muted-2); }

@@ -33,10 +33,8 @@ export function CitationCard({ citation, index }: CitationCardProps) {
         {open && (
           <>
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
               onClick={() => setOpen(false)}
             />
             <motion.div
@@ -44,46 +42,38 @@ export function CitationCard({ citation, index }: CitationCardProps) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               transition={{ duration: 0.15 }}
-              className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg"
+              className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-lg"
             >
               <div className="glass-card p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-accent/15 border border-accent/20 flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-lg bg-accent/12 border border-accent/20 flex items-center justify-center">
                       <FileText size={13} className="text-accent-3" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-white/90">Source [{index + 1}]</p>
-                      <p className="text-xs text-muted truncate max-w-[280px]">{citation.source}</p>
+                      <p className="text-sm font-semibold text-[var(--fg)]">Source [{index + 1}]</p>
+                      <p className="text-xs text-[var(--muted)] truncate max-w-[260px]">{citation.source}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setOpen(false)}
-                    className="text-muted hover:text-white transition-colors p-1"
-                  >
+                  <button onClick={() => setOpen(false)} className="text-[var(--muted)] hover:text-[var(--fg)] transition-colors p-1">
                     <X size={14} />
                   </button>
                 </div>
 
-                <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-3 mb-3">
-                  <p className="text-sm text-white/80 leading-relaxed line-clamp-6">{citation.cited_text}</p>
+                <div className="rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] p-3 mb-3">
+                  <p className="text-sm text-[var(--fg)] leading-relaxed line-clamp-6">{citation.cited_text}</p>
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-muted">
-                  <div className="flex items-center gap-3">
-                    <span>Doc: <span className="text-muted-2 font-mono">{citation.doc_id.slice(0, 16)}…</span></span>
+                <div className="flex items-center justify-between text-xs text-[var(--muted)] flex-wrap gap-2">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span>Doc: <span className="text-[var(--muted-2)] font-mono">{citation.doc_id.slice(0, 16)}…</span></span>
                     {citation.page_number && <span>Page {citation.page_number}</span>}
                     <span>Span: {citation.span_start}–{citation.span_end}</span>
                   </div>
                   {citation.source_url && (
-                    <a
-                      href={citation.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-accent hover:text-accent-3 transition-colors"
-                    >
-                      <ExternalLink size={11} />
-                      Open source
+                    <a href={citation.source_url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-accent hover:text-accent-3 transition-colors">
+                      <ExternalLink size={11} /> Open source
                     </a>
                   )}
                 </div>
