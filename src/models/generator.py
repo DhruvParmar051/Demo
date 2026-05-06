@@ -81,17 +81,31 @@ class Generator:
         self.cpu_fallback_model = cpu_fallback_model or getattr(cfg.models.generator, "cpu_fallback_model", None)
         self.adapter_path = adapter_path
         
-        # Resolve GGUF path: explicit arg > config field
-        self.gguf_path = gguf_path or getattr(cfg.models.generator, "gguf_path", None)
+        # Resolve GGUF path: explicit arg > config field > known fallback variants
+        _cfg_gguf = getattr(cfg.models.generator, "gguf_path", None)
+        _fallback_order = [
+            gguf_path,
+            _cfg_gguf,
+            "checkpoints/aegis_base.gguf",
+            "checkpoints/aegis_sft.gguf",
+            "checkpoints/aegis_dpo.gguf",
+        ]
+        self.gguf_path = next(
+            (p for p in _fallback_order if p and Path(p).exists()), None
+        )
 
-        # Auto-select backend: if a GGUF file is configured and exists on disk,
-        # default to "gguf"; otherwise fall back to "hf".
+        # Auto-select backend: if a GGUF file is resolved above, use it.
+        # Only fall back to HF when no GGUF is available at all.
         if backend:
             self.backend = backend
-        elif self.gguf_path and Path(self.gguf_path).exists():
+        elif self.gguf_path:
             self.backend = "gguf"
         else:
             self.backend = "hf"
+            logger.warning(
+                "No GGUF found in checkpoints/; falling back to HF backend "
+                "(will load full Qwen2.5-7B — very slow on CPU/MPS)."
+            )
 
         # GGUF (llama-cpp) cannot load HuggingFace LoRA adapters at all.
         # adapter_path is only honoured by the "hf" backend.

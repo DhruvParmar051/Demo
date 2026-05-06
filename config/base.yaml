@@ -27,7 +27,7 @@ models:
     top_k: 50
     repetition_penalty: 1.1
     do_sample: true
-    gguf_path: "checkpoints/aegis_final.gguf"
+    gguf_path: "checkpoints/aegis_base.gguf"
     gguf_n_ctx: 4096
     gguf_n_gpu_layers: 0  # 0 = CPU only (MPS Metal crashes with quantized attention shapes)
 
