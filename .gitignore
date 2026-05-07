@@ -64,6 +64,7 @@ data/bm25_index.pkl
 data/audit.db
 data/raw_docs/
 data/processed/
+docs/report_final/*
 
 # --- Logs ---
 logs/
