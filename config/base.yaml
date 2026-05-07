@@ -16,18 +16,18 @@ models:
 
   reranker:
     name: "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    max_seq_length: 512   # MiniLM-L-6 hard limit; 8192 was wrong and wasted padding
+    max_seq_length: 8192
     max_query_length: 128
 
   generator:
     name: "Qwen/Qwen2.5-7B-Instruct"
-    max_new_tokens: 400   # enough for 5-6 sentence answers without excessive latency
+    max_new_tokens: 512
     temperature: 0.3
     top_p: 0.9
     top_k: 50
     repetition_penalty: 1.1
     do_sample: true
-    gguf_path: "checkpoints/aegis_base.gguf"
+    gguf_path: "checkpoints/aegis_final.gguf"
     gguf_n_ctx: 4096
     gguf_n_gpu_layers: 0  # 0 = CPU only (MPS Metal crashes with quantized attention shapes)
 
@@ -44,7 +44,7 @@ models:
 # Retrieval Settings
 # ---------------------------------------------------------------------------
 retrieval:
-  top_k: 10          # was 20; halves reranker work with negligible recall drop
+  top_k: 20
   rerank_top_k: 5
   chunk_size: 256
   chunk_overlap: 96
@@ -62,10 +62,10 @@ retrieval:
 # CGAL (Confidence-Gated Action Loop) Settings
 # ---------------------------------------------------------------------------
 cgal:
-  max_iterations: 2   # was 3; 3rd iteration almost never improves quality but triples worst-case latency
-  high_confidence: 0.35   # head outputs 0.24-0.34; above this = answer without verify
-  medium_confidence: 0.22  # above this = answer with verify; covers full observed range
-  low_confidence: 0.10     # below this = escalate immediately; else retry
+  max_iterations: 3
+  high_confidence: 0.55   # lowered: confidence head trained on 500 pairs outputs ~0.4-0.7
+  medium_confidence: 0.40  # lowered: trigger NLI verify instead of escalating
+  low_confidence: 0.20     # lowered: retry before escalating
   # below low_confidence: escalate / return "I don't know"
   verify_low: 0.50         # lowered: NLI entailment threshold
   verify_high: 0.65        # lowered: high-confidence NLI accept

@@ -38,7 +38,6 @@ from src.serving.sse import (
 from src.utils.config import get_config
 from src.utils.device import get_device_string
 from src.serving.ingest_router import build_ingest_router
-from src.serving.chitchat import detect as _chitchat_detect, make_response as _chitchat_response
 from loguru import logger
 
 # Imported at module level so Pydantic v2 can resolve forward references in
@@ -125,14 +124,8 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",   # Next.js dev
-            "http://localhost:3001",
-            "http://127.0.0.1:3000",
-            "http://localhost",
-            "http://192.168.29.236:3000",  # LAN access
-        ],
-        allow_origin_regex=r"http://localhost:\d+",  # any local port
+        allow_origins=["http://localhost:8501", "http://localhost:3000",
+                       "http://localhost"],
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -162,7 +155,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
     # uvicorn begins accepting requests.
     if model_tag:
         _tag = model_tag.lower()
-        logger.info("Pre-loading pipeline '{}' in main thread ...", _tag)
+        logger.info("Pre-loading pipeline '%s' in main thread ...", _tag)
         try:
             _pipeline = registry._build(_tag)
             registry._cache[_tag] = _pipeline
@@ -171,10 +164,10 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
             if _gen is not None and hasattr(_gen, "_ensure_loaded"):
                 logger.info("Loading generator backend in main thread ...")
                 _gen._ensure_loaded()
-                logger.info("Generator ready (backend={}).", _gen.backend)
-            logger.info("Pipeline '{}' ready.", _tag)
+                logger.info("Generator ready (backend=%s).", _gen.backend)
+            logger.info("Pipeline '%s' ready.", _tag)
         except Exception as _exc:
-            logger.warning("Pipeline pre-load failed ({}); will retry on first request.", _exc)
+            logger.warning("Pipeline pre-load failed (%s); will retry on first request.", _exc)
 
     sse_heartbeat_interval: float = float(
         getattr(cfg.serving, "sse_heartbeat_interval", 15)
@@ -199,13 +192,8 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
     async def query(req: QueryRequest) -> dict[str, Any]:
         cached = _cache_get(req.query, req.model_tag)
         if cached is not None:
-            logger.debug("query cache hit for model={}", req.model_tag)
+            logger.debug("query cache hit for model=%s", req.model_tag)
             return cached
-
-        cc = _chitchat_detect(req.query)
-        if cc.matched:
-            logger.debug("chitchat fast-path: '{}'", req.query[:60])
-            return _chitchat_response(cc.reply, req.model_tag).to_dict()
 
         pipeline = await registry.get(req.model_tag)
         t_start = time.perf_counter()
@@ -245,18 +233,6 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
                 status_code=500, detail="sse-starlette not installed"
             )
 
-        cc = _chitchat_detect(req.query)
-        if cc.matched:
-            logger.debug("chitchat fast-path (stream): '{}'", req.query[:60])
-            resp = _chitchat_response(cc.reply, req.model_tag)
-            import json as _cj
-
-            async def _chitchat_sse():
-                yield {"event": EVENT_TOKEN, "data": _cj.dumps({"text": cc.reply})}
-                yield {"event": EVENT_DONE, "data": _cj.dumps(resp.to_dict(), default=str)}
-
-            return EventSourceResponse(_chitchat_sse())
-
         pipeline = await registry.get(req.model_tag)
         engine = getattr(pipeline, "engine", None) or pipeline
 
@@ -265,19 +241,10 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
         heartbeat_queue: asyncio.Queue[str | None] = asyncio.Queue()
 
         async def _heartbeat_sender() -> None:
+            """Emit SSE comment lines at a fixed interval to keep the connection alive."""
             while True:
                 await asyncio.sleep(sse_heartbeat_interval)
-                await heartbeat_queue.put("heartbeat")
-
-        def _sse(event: str, data: Any) -> dict:
-            # sse-starlette v2 wraps raw strings with 'data:' on every line,
-            # breaking the frontend. Yielding dicts produces the correct wire
-            # format: event: <name>\r\ndata: <json>\r\n\r\n
-            import json as _j
-            return {
-                "event": event,
-                "data": data if isinstance(data, str) else _j.dumps(data, default=str),
-            }
+                await heartbeat_queue.put(": heartbeat\n\n")
 
         async def _gen():
             t_start = time.perf_counter()
@@ -300,47 +267,48 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
                         async for ev in agen:
                             yield ev
 
+                    # Flush any pending heartbeats before each real event.
                     async for ev in _drain_agen():
                         while not heartbeat_queue.empty():
                             hb = heartbeat_queue.get_nowait()
                             if hb:
-                                yield {"comment": hb}
+                                yield hb
 
                         etype = ev.get("type", "token")
                         data = ev.get("data")
                         if etype == "token":
-                            yield _sse(EVENT_TOKEN, {"text": data})
+                            yield format_sse(EVENT_TOKEN, {"text": data})
                         elif etype == "citation":
-                            yield _sse(EVENT_CITATION, data)
+                            yield format_sse(EVENT_CITATION, data)
                         elif etype == "tool_call":
-                            yield _sse(EVENT_TOOL_CALL, data)
+                            yield format_sse(EVENT_TOOL_CALL, data)
                         elif etype == "verify":
                             if not verify_emitted:
-                                yield _sse(EVENT_VERIFY_START, {})
+                                yield format_sse(EVENT_VERIFY_START, {})
                                 verify_emitted = True
-                            yield _sse(EVENT_VERIFY_RESULT, data)
+                            yield format_sse(EVENT_VERIFY_RESULT, data)
                         elif etype == "done":
                             final_dict = data if isinstance(data, dict) else {}
-                            yield _sse(EVENT_DONE, final_dict)
+                            yield format_sse(EVENT_DONE, final_dict)
                 else:
-                    # Non-streaming fallback: run full pipeline in thread,
-                    # emit heartbeats while waiting, then push all events.
+                    # Non-streaming fallback: poll and emit heartbeats while waiting.
                     response_task = asyncio.create_task(
                         asyncio.to_thread(pipeline.run, req.query)
                     )
                     while not response_task.done():
                         await asyncio.sleep(min(1.0, sse_heartbeat_interval))
-                        yield {"comment": "heartbeat"}
+                        yield f": heartbeat\n\n"
                     response: QueryResponse = await response_task
                     final = response
-                    yield _sse(EVENT_TOKEN, {"text": response.answer})
+                    yield format_sse(EVENT_TOKEN, {"text": response.answer})
                     for c in response.citations:
-                        yield _sse(EVENT_CITATION, c.to_dict())
-                    yield _sse(EVENT_DONE, response.to_dict())
+                        yield format_sse(EVENT_CITATION, c.to_dict())
+                    yield format_sse(EVENT_DONE, response.to_dict())
 
             except Exception as exc:
                 logger.exception("stream failed")
-                yield _sse(EVENT_ERROR, {"message": str(exc), "type": exc.__class__.__name__})
+                yield format_sse(EVENT_ERROR, {"message": str(exc),
+                                                "type": exc.__class__.__name__})
             finally:
                 heartbeat_task.cancel()
                 try:
@@ -353,7 +321,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
                         final.latency_ms = (time.perf_counter() - t_start) * 1000.0
                     await asyncio.to_thread(audit.log, final,
                                              req.model_tag, req.query)
-        
+
         return EventSourceResponse(_gen(), media_type="text/event-stream")
 
     # ---------------- /query/user_docs ------------------------------------
@@ -382,23 +350,33 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Retrieval failed: {exc}")
 
-        if not results:
+        # Filter low-similarity results — below 0.30 cosine means no real match
+        MIN_SIMILARITY = 0.30
+        if results:
+            logger.info("user_docs scores: {}", [round(s, 3) for _, s in results])
+        results = [(c, s) for c, s in results if s >= MIN_SIMILARITY]
+
+        def _create_ticket(query: str) -> dict:
             from src.tools.executor import ToolExecutor
             from pathlib import Path as _Path
-            _ticket_db = _Path(config.data.audit_db_path).parent / "tickets.db"
+            _ticket_db = _Path(cfg.data.audit_db_path).parent / "tickets.db"
             _executor = ToolExecutor(retriever=None, ticket_store_path=_ticket_db)
-            ticket_result = _executor.create_ticket(
-                query=req.query,
-                summary=f"Out-of-scope query (no matching document content): {req.query[:200]}",
+            return _executor.create_ticket(
+                query=query,
+                summary=f"Out-of-scope query: {query[:200]}",
                 category="other",
                 severity="medium",
             )
+
+        if not results:
+            ticket_result = await asyncio.to_thread(_create_ticket, req.query)
             escalation = QueryResponse(
                 answer=(
-                    "I couldn't find relevant information in your uploaded documents to answer this question. "
+                    "This question is outside the scope of your uploaded documents. "
                     f"A support ticket has been created (ID: {ticket_result['ticket_id']}). "
                     f"A specialist will follow up within {ticket_result['estimated_response_time']}."
                 ),
+                citations=[],
                 confidence=0.0,
                 ticket_id=ticket_result["ticket_id"],
             )
@@ -421,6 +399,39 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
             )
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Generation failed: {exc}")
+
+        # Detect out-of-scope answers — model said it can't answer from context
+        _OUT_OF_SCOPE_PHRASES = (
+            "not directly applicable",
+            "not directly related",
+            "not applicable to the context",
+            "not found in the",
+            "no relevant information",
+            "cannot answer",
+            "outside the scope",
+            "not covered in",
+            "not mentioned in",
+            "not present in",
+            "does not contain",
+            "no information",
+        )
+        answer_lower = str(answer).lower()
+        is_out_of_scope = any(p in answer_lower for p in _OUT_OF_SCOPE_PHRASES)
+
+        if is_out_of_scope:
+            ticket_result = await asyncio.to_thread(_create_ticket, req.query)
+            escalation = QueryResponse(
+                answer=(
+                    "This question is outside the scope of your uploaded documents. "
+                    f"A support ticket has been created (ID: {ticket_result['ticket_id']}). "
+                    f"A specialist will follow up within {ticket_result['estimated_response_time']}."
+                ),
+                citations=[],
+                confidence=0.0,
+                ticket_id=ticket_result["ticket_id"],
+            )
+            await asyncio.to_thread(audit.log, escalation, req.model_tag, req.query)
+            return escalation.to_dict()
 
         citations = [
             Citation(
@@ -504,7 +515,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
                     )
                     logger.info("Session collection cleanup completed.")
                 except Exception as exc:
-                    logger.warning("Session cleanup failed: {}", exc)
+                    logger.warning("Session cleanup failed: %s", exc)
         asyncio.create_task(_cleanup_loop())
 
     # ---------------- shutdown hook ---------------------------------------

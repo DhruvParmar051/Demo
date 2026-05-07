@@ -1,13 +1,37 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Message, Citation, ToolCall, ModelTag, QueryResponse } from "@/lib/types";
+import type { Message, ModelTag, QueryResponse } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const STORAGE_KEY = "aegis_sessions_v2";
 const ACTIVE_KEY = "aegis_active_v2";
 const FIXED_MODEL: ModelTag = "m5";
+
+const CHITCHAT_RESPONSES: Record<string, string> = {
+  greeting: "Hello! I'm AegisRAG, your document-grounded assistant. Upload a document using the + button and I'll answer questions based on its contents.",
+  howAreYou: "I'm doing great, thanks for asking! Upload a document and I'll get to work answering your questions.",
+  thanks: "You're welcome! Let me know if you have any other questions about your documents.",
+  bye: "Goodbye! Come back anytime you need help with your documents.",
+  whoAreYou: "I'm AegisRAG — an evidence-based RAG assistant. I answer questions grounded in documents you upload. Use the + button to get started.",
+  whatCanYouDo: "I can answer questions based on documents you upload (PDF, DOCX, TXT, MD). Upload a file using the + button, then ask me anything about it.",
+  help: "To get started: click the + button to upload a document, then type your question. I'll answer based only on what's in your document.",
+};
+
+function getChitchatResponse(query: string): string | null {
+  const q = query.trim().toLowerCase();
+  if (/^(hi|hello|hey|howdy|greetings|good\s+(morning|afternoon|evening|day))/i.test(q)) return CHITCHAT_RESPONSES.greeting;
+  if (/^how are you/i.test(q)) return CHITCHAT_RESPONSES.howAreYou;
+  if (/^(thanks|thank you|thx|ty)/i.test(q)) return CHITCHAT_RESPONSES.thanks;
+  if (/^(bye|goodbye|see you|take care)/i.test(q)) return CHITCHAT_RESPONSES.bye;
+  if (/^who are you/i.test(q)) return CHITCHAT_RESPONSES.whoAreYou;
+  if (/^what (are|can) you do/i.test(q)) return CHITCHAT_RESPONSES.whatCanYouDo;
+  if (/^help[!?.]?$/i.test(q)) return CHITCHAT_RESPONSES.help;
+  if (/^(ok|okay|got it|understood|sounds good|great|cool|nice|yes|no|sure|maybe|absolutely|definitely)[!.,]?$/i.test(q)) return "Got it! Feel free to ask me anything about your uploaded documents.";
+  if (/^what('s| is) up/i.test(q)) return CHITCHAT_RESPONSES.greeting;
+  return null;
+}
 
 type ChatStatus = "idle" | "streaming" | "done" | "error";
 
@@ -72,11 +96,13 @@ interface UseChatSessionsReturn {
   messages: Message[];
   collectionId: string;
   status: ChatStatus;
-  sendMessage: (query: string) => Promise<void>;
+  sendMessage: (query: string, attachedFiles?: { name: string; size: number; type: string }[]) => Promise<void>;
   stopStreaming: () => void;
   createNewChat: () => void;
   switchChat: (id: string) => void;
   setCollectionId: (id: string) => void;
+  renameSession: (id: string, title: string) => void;
+  deleteSession: (id: string) => void;
 }
 
 export function useChatSessions(): UseChatSessionsReturn {
@@ -166,6 +192,37 @@ export function useChatSessions(): UseChatSessionsReturn {
     [activeSessionId, updateSession]
   );
 
+  const renameSession = useCallback(
+    (id: string, title: string) => {
+      updateSession(id, (s) => ({ ...s, title: title.trim() || s.title }));
+    },
+    [updateSession]
+  );
+
+  const deleteSession = useCallback(
+    (id: string) => {
+      setSessions((prev) => {
+        const next = prev.filter((s) => s.id !== id);
+        writeSessions(next);
+        // If we deleted the active session, switch to the first remaining one (or create new)
+        if (id === activeSessionId) {
+          if (next.length > 0) {
+            writeActiveId(next[0].id);
+            setActiveSessionId(next[0].id);
+          } else {
+            const fresh = makeSession();
+            writeSessions([fresh]);
+            writeActiveId(fresh.id);
+            setActiveSessionId(fresh.id);
+            return [fresh];
+          }
+        }
+        return next;
+      });
+    },
+    [activeSessionId]
+  );
+
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
     setStatus("idle");
@@ -184,15 +241,56 @@ export function useChatSessions(): UseChatSessionsReturn {
   // ── sendMessage ───────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(
-    async (query: string) => {
+    async (query: string, attachedFiles?: { name: string; size: number; type: string }[]) => {
       if (status === "streaming") return;
 
       const sessionId = activeSessionId;
       const session = sessionsRef.current.find((s) => s.id === sessionId);
       if (!session) return;
 
-      const userMsg: Message = { id: generateId(), role: "user", content: query };
+      const userMsg: Message = { id: generateId(), role: "user", content: query, attachedFiles };
       const assistantId = generateId();
+
+      // Set title from first user message
+      const isFirstMessage = session.messages.length === 0;
+
+      // ── Chitchat fast-path (client-side, no API call) ──────────────────────
+      const chitchatReply = getChitchatResponse(query);
+      if (chitchatReply) {
+        updateSession(sessionId, (s) => ({
+          ...s,
+          title: isFirstMessage ? query.slice(0, 50) : s.title,
+          messages: [...s.messages, userMsg, {
+            id: assistantId,
+            role: "assistant" as const,
+            content: chitchatReply,
+            citations: [],
+            toolCalls: [],
+            isStreaming: false,
+            modelTag: FIXED_MODEL,
+          }],
+        }));
+        return;
+      }
+
+      // ── No document uploaded — prompt user to upload ────────────────────────
+      if (!session.collectionId) {
+        updateSession(sessionId, (s) => ({
+          ...s,
+          title: isFirstMessage ? query.slice(0, 50) : s.title,
+          messages: [...s.messages, userMsg, {
+            id: assistantId,
+            role: "assistant" as const,
+            content: "To answer your question, I need a document to reference. Please upload a PDF, DOCX, TXT, or MD file using the **+** button, then ask your question again.",
+            citations: [],
+            toolCalls: [],
+            isStreaming: false,
+            modelTag: FIXED_MODEL,
+          }],
+        }));
+        return;
+      }
+
       const assistantMsg: Message = {
         id: assistantId,
         role: "assistant",
@@ -203,8 +301,6 @@ export function useChatSessions(): UseChatSessionsReturn {
         modelTag: FIXED_MODEL,
       };
 
-      // Set title from first user message
-      const isFirstMessage = session.messages.length === 0;
       updateSession(sessionId, (s) => ({
         ...s,
         title: isFirstMessage ? query.slice(0, 50) : s.title,
@@ -216,7 +312,7 @@ export function useChatSessions(): UseChatSessionsReturn {
       abortRef.current = controller;
 
       try {
-        // Use user_docs endpoint when collection is set, otherwise streaming system KB
+        // Use user_docs endpoint when collection is set
         if (session.collectionId) {
           const url = `${API_URL}/query/user_docs?collection_id=${encodeURIComponent(session.collectionId)}`;
           const res = await fetch(url, {
@@ -246,123 +342,6 @@ export function useChatSessions(): UseChatSessionsReturn {
           setStatus("done");
           return;
         }
-
-        // Streaming system KB
-        const history = session.messages
-          .filter((m) => !m.isStreaming && !m.error)
-          .map((m) => ({ role: m.role, content: m.content }));
-
-        const res = await fetch(`${API_URL}/query/stream`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query,
-            model_tag: FIXED_MODEL,
-            conversation_history: history,
-          }),
-          signal: controller.signal,
-        });
-        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let currentContent = "";
-        const currentCitations: Citation[] = [];
-        const currentToolCalls: ToolCall[] = [];
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const normalized = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-          const lines = normalized.split("\n");
-          buffer = lines.pop() ?? "";
-
-          let eventType = "";
-          let eventData = "";
-
-          for (const line of lines) {
-            if (line.startsWith("event: ")) {
-              eventType = line.slice(7).trim();
-            } else if (line.startsWith("data: ")) {
-              eventData = line.slice(6).trim();
-            } else if (line === "" && eventType && eventData) {
-              try {
-                const parsed = JSON.parse(eventData);
-                if (eventType === "token") {
-                  currentContent += parsed.text ?? "";
-                  updateMessages(sessionId, (msgs) =>
-                    msgs.map((m) =>
-                      m.id === assistantId ? { ...m, content: currentContent } : m
-                    )
-                  );
-                } else if (eventType === "citation") {
-                  currentCitations.push(parsed as Citation);
-                  updateMessages(sessionId, (msgs) =>
-                    msgs.map((m) =>
-                      m.id === assistantId
-                        ? { ...m, citations: [...currentCitations] }
-                        : m
-                    )
-                  );
-                } else if (eventType === "tool_call") {
-                  currentToolCalls.push(parsed as ToolCall);
-                } else if (eventType === "verify_result") {
-                  updateMessages(sessionId, (msgs) =>
-                    msgs.map((m) =>
-                      m.id === assistantId
-                        ? { ...m, verifyVerdict: parsed.verdict }
-                        : m
-                    )
-                  );
-                } else if (eventType === "done") {
-                  const d = parsed as Partial<QueryResponse>;
-                  updateMessages(sessionId, (msgs) =>
-                    msgs.map((m) =>
-                      m.id === assistantId
-                        ? {
-                            ...m,
-                            content: d.answer ?? currentContent,
-                            citations: d.citations ?? currentCitations,
-                            confidence: d.confidence,
-                            verifyVerdict: d.verify_verdict,
-                            ticketId: d.ticket_id,
-                            isStreaming: false,
-                          }
-                        : m
-                    )
-                  );
-                  setStatus("done");
-                } else if (eventType === "error") {
-                  updateMessages(sessionId, (msgs) =>
-                    msgs.map((m) =>
-                      m.id === assistantId
-                        ? { ...m, error: parsed.message, isStreaming: false }
-                        : m
-                    )
-                  );
-                  setStatus("error");
-                }
-              } catch {
-                // ignore parse errors / heartbeat comments
-              }
-              eventType = "";
-              eventData = "";
-            }
-          }
-        }
-
-        // Ensure streaming flag cleared if stream ended without done event
-        updateMessages(sessionId, (msgs) =>
-          msgs.map((m) =>
-            m.id === assistantId && m.isStreaming
-              ? { ...m, isStreaming: false }
-              : m
-          )
-        );
-        setStatus("done");
       } catch (err: unknown) {
         if ((err as Error).name === "AbortError") {
           setStatus("idle");
@@ -393,5 +372,7 @@ export function useChatSessions(): UseChatSessionsReturn {
     createNewChat,
     switchChat,
     setCollectionId,
+    renameSession,
+    deleteSession,
   };
 }

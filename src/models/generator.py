@@ -81,40 +81,17 @@ class Generator:
         self.cpu_fallback_model = cpu_fallback_model or getattr(cfg.models.generator, "cpu_fallback_model", None)
         self.adapter_path = adapter_path
         
-        # Resolve GGUF path: explicit arg > config field > known fallback variants
-        _cfg_gguf = getattr(cfg.models.generator, "gguf_path", None)
-        _fallback_order = [
-            gguf_path,
-            _cfg_gguf,
-            "checkpoints/aegis_base.gguf",
-            "checkpoints/aegis_sft.gguf",
-            "checkpoints/aegis_dpo.gguf",
-        ]
-        self.gguf_path = next(
-            (p for p in _fallback_order if p and Path(p).exists()), None
-        )
+        # Resolve GGUF path: explicit arg > config field
+        self.gguf_path = gguf_path or getattr(cfg.models.generator, "gguf_path", None)
 
-        # Auto-select backend: if a GGUF file is resolved above, use it.
-        # Only fall back to HF when no GGUF is available at all.
+        # Auto-select backend: if a GGUF file is configured and exists on disk,
+        # default to "gguf"; otherwise fall back to "hf".
         if backend:
             self.backend = backend
-        elif self.gguf_path:
+        elif self.gguf_path and Path(self.gguf_path).exists():
             self.backend = "gguf"
         else:
             self.backend = "hf"
-            logger.warning(
-                "No GGUF found in checkpoints/; falling back to HF backend "
-                "(will load full Qwen2.5-7B — very slow on CPU/MPS)."
-            )
-
-        # GGUF (llama-cpp) cannot load HuggingFace LoRA adapters at all.
-        # adapter_path is only honoured by the "hf" backend.
-        if self.adapter_path and self.backend == "gguf":
-            logger.warning(
-                "adapter_path=%s ignored: GGUF backend cannot load HF adapters. "
-                "To apply SFT/DPO weights, merge them into the GGUF or switch to backend='hf'.",
-                self.adapter_path,
-            )
         self.quantize_4bit = quantize_4bit
         self.device = get_device(cfg.device.preferred_device)
         self.device_str = get_device_string(self.device)
@@ -129,10 +106,6 @@ class Generator:
         self._model = None
         self._tokenizer = None
         self._llama = None  # for GGUF
-        # Serialize all llama-cpp calls to prevent concurrent C++ context access.
-        # llama-cpp-python's internal thread pool is not reentrant and will
-        # segfault on macOS when called from multiple Python threads simultaneously.
-        self._llama_lock = threading.Lock()
 
         if warmup:
             self._ensure_loaded()
@@ -416,28 +389,14 @@ class Generator:
             else:
                 n_gpu_layers = 0
 
-        import os as _os_cpu
-        # Use half the physical cores for inference — leaves headroom for the
-        # retrieval/reranker threads.  The segfault was caused by stream=True
-        # (fixed by generate-then-yield), NOT by multi-threading, so it's safe
-        # to restore parallelism here.
-        n_threads = max(1, (_os_cpu.cpu_count() or 4) // 2)
-        n_batch = 512  # tokens processed in parallel during prompt ingestion
-
         self._llama = Llama(
             model_path=str(self.gguf_path),
             n_ctx=n_ctx,
             n_gpu_layers=n_gpu_layers,
-            n_threads=n_threads,
-            n_batch=n_batch,
             verbose=False,
             seed=42,
-            use_mlock=False,  # prevents semaphore leak on macOS at shutdown
         )
-        logger.info(
-            "GGUF loaded: n_gpu_layers=%d ctx=%d n_threads=%d n_batch=%d",
-            n_gpu_layers, n_ctx, n_threads, n_batch,
-        )
+        logger.info("GGUF loaded: n_gpu_layers=%d ctx=%d", n_gpu_layers, n_ctx)
 
     # ------------------------------------------------------------------
     # HF generation / streaming
@@ -512,22 +471,29 @@ class Generator:
         llama = self._llama
         if llama is None:
             raise RuntimeError("GGUF backend is not loaded.")
-        with self._llama_lock:
-            out = llama(
-                prompt,
-                max_tokens=max_new_tokens,
-                temperature=temperature,
-                top_p=1.0,
-                echo=False,
-                stop=_STOP,
-            )
+        out = llama(
+            prompt,
+            max_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=1.0,
+            echo=False,
+            stop=_STOP,
+        )
         return out["choices"][0]["text"].strip()
 
     def _stream_gguf(self, prompt: str, max_new_tokens: int) -> Iterator[str]:
-        # llama-cpp-python's native stream=True iterator is not safe to use
-        # from Python's async runtime on macOS: the C++ cleanup crashes when
-        # the generator is closed before exhaustion (client disconnect, etc.).
-        # Generate fully under the lock, then yield word-by-word from Python.
-        full_text = self._generate_gguf(prompt, max_new_tokens, temperature=0.0)
-        for word in full_text.split(" "):
-            yield word + " "
+        llama = self._llama
+        if llama is None:
+            raise RuntimeError("GGUF backend is not loaded.")
+        for chunk in llama(
+            prompt,
+            max_tokens=max_new_tokens,
+            temperature=0.0,
+            top_p=1.0,
+            echo=False,
+            stream=True,
+            stop=_STOP,
+        ):
+            piece = chunk["choices"][0]["text"]
+            if piece:
+                yield piece

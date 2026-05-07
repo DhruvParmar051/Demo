@@ -81,6 +81,7 @@ export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  attachedFiles?: { name: string; size: number; type: string }[];
   citations?: Citation[];
   toolCalls?: ToolCall[];
   confidence?: number;

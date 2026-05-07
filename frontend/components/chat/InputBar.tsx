@@ -17,7 +17,7 @@ const ACCEPTED = {
 type FileUploadState = { file: File; status: "pending" | "uploading" | "done" | "error"; error?: string };
 
 interface InputBarProps {
-  onSend: (query: string) => void;
+  onSend: (query: string, attachedFiles?: { name: string; size: number; type: string }[]) => void;
   onStop: () => void;
   isStreaming: boolean;
   collectionId: string;
@@ -42,10 +42,13 @@ export function InputBar({
   const handleSend = useCallback(() => {
     const q = value.trim();
     if (!q || isStreaming) return;
-    onSend(q);
+    const attached = files
+      .filter((f) => f.status === "done")
+      .map((f) => ({ name: f.file.name, size: f.file.size, type: f.file.type }));
+    onSend(q, attached.length > 0 ? attached : undefined);
     setValue("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
-  }, [value, isStreaming, onSend]);
+  }, [value, isStreaming, onSend, files]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -209,6 +212,26 @@ export function InputBar({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Attached files strip — shown when files are indexed */}
+        {files.filter((f) => f.status === "done").length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {files.filter((f) => f.status === "done").map((f, i) => (
+              <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] max-w-[220px]">
+                <div className="w-7 h-7 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center flex-shrink-0">
+                  <FileText size={13} className="text-accent-3" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-[var(--fg)] truncate leading-tight">{f.file.name}</p>
+                  <p className="text-[10px] text-[var(--muted)]">{formatBytes(f.file.size)}</p>
+                </div>
+                <button onClick={() => removeFile(files.indexOf(f))} className="text-[var(--muted)] hover:text-danger transition-colors flex-shrink-0 ml-0.5">
+                  <X size={11} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Input row */}
         <div

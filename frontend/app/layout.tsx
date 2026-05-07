@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { ChatSessionsProvider } from "@/components/providers/ChatSessionsProvider";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -30,7 +31,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="h-full overflow-hidden">
         <ThemeProvider>
-          {children}
+          <ChatSessionsProvider>
+            {children}
+          </ChatSessionsProvider>
         </ThemeProvider>
       </body>
     </html>

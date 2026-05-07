@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, Cpu, Server } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { useChatSessionsContext } from "@/components/providers/ChatSessionsProvider";
 import { MetricsCards } from "@/components/analytics/MetricsCards";
 import { LatencyChart } from "@/components/analytics/LatencyChart";
 import { TicketsTable } from "@/components/analytics/TicketsTable";
@@ -12,6 +13,7 @@ import { cn } from "@/lib/utils";
 interface DataPoint { time: string; latency: number; confidence: number }
 
 export default function AnalyticsPage() {
+  const { sessions, activeSessionId, createNewChat, switchChat, renameSession, deleteSession } = useChatSessionsContext();
   const { health, tickets, parsedMetrics, loading, error, refetch } = useMetrics(30000);
   const [chartData, setChartData] = useState<DataPoint[]>([]);
 
@@ -36,7 +38,14 @@ export default function AnalyticsPage() {
 
   return (
     <div className="flex h-full w-full" style={{ background: "var(--page-bg)" }}>
-      <Sidebar />
+      <Sidebar
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onNewChat={() => { createNewChat(); window.location.href = "/chat"; }}
+        onSwitchChat={(id) => { switchChat(id); window.location.href = "/chat"; }}
+        onRenameSession={renameSession}
+        onDeleteSession={deleteSession}
+      />
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         {/* Header */}
         <div className="px-4 sm:px-8 py-5 sm:py-7 border-b border-[var(--glass-border)] pt-14 md:pt-6">

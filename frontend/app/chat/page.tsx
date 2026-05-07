@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { InputBar } from "@/components/chat/InputBar";
-import { useChatSessions } from "@/hooks/useChatSessions";
+import { useChatSessionsContext } from "@/components/providers/ChatSessionsProvider";
 import { getHealth } from "@/lib/api";
 
 export default function ChatPage() {
@@ -20,8 +21,11 @@ export default function ChatPage() {
     createNewChat,
     switchChat,
     setCollectionId,
-  } = useChatSessions();
+    renameSession,
+    deleteSession,
+  } = useChatSessionsContext();
 
+  const router = useRouter();
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
@@ -34,13 +38,20 @@ export default function ChatPage() {
     return () => clearInterval(id);
   }, []);
 
+  const handleNewChat = () => {
+    createNewChat();
+    router.push("/chat");
+  };
+
   return (
     <div className="flex h-full w-full" style={{ background: "var(--page-bg)" }}>
       <Sidebar
         sessions={sessions}
         activeSessionId={activeSessionId}
-        onNewChat={createNewChat}
+        onNewChat={handleNewChat}
         onSwitchChat={switchChat}
+        onRenameSession={renameSession}
+        onDeleteSession={deleteSession}
       />
 
       <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">

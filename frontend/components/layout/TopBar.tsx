@@ -1,7 +1,9 @@
 "use client";
 
-import { WifiOff } from "lucide-react";
-import { motion } from "framer-motion";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
+import { WifiOff, Sun, Moon } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface TopBarProps {
   title: string;
@@ -9,12 +11,19 @@ interface TopBarProps {
 }
 
 export function TopBar({ title, isConnected }: TopBarProps) {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const isDark = theme === "dark";
+
   return (
     <header
       className="flex items-center justify-between px-4 md:px-6 py-3 border-b border-[var(--glass-border)] backdrop-blur-xl z-10 flex-shrink-0"
       style={{ background: "var(--topbar-bg)" }}
     >
-      <div className="flex items-center gap-2 md:gap-3 pl-10 md:pl-0">
+      {/* Title + connection status */}
+      <div className="flex items-center gap-2 md:gap-3">
         <h1 className="text-sm font-semibold text-[var(--fg)]">{title}</h1>
         <div className="flex items-center gap-1.5">
           {isConnected ? (
@@ -34,6 +43,30 @@ export function TopBar({ title, isConnected }: TopBarProps) {
           )}
         </div>
       </div>
+
+      {/* Theme toggle — icon only */}
+      {mounted && (
+        <button
+          onClick={() => setTheme(isDark ? "light" : "dark")}
+          aria-label="Toggle theme"
+          className="w-8 h-8 flex items-center justify-center rounded-xl text-[var(--muted)] hover:text-[var(--fg)] hover:bg-[var(--glass-bg)] border border-[var(--glass-border)] transition-all duration-200"
+        >
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={theme}
+              initial={{ rotate: -90, opacity: 0, scale: 0.7 }}
+              animate={{ rotate: 0, opacity: 1, scale: 1 }}
+              exit={{ rotate: 90, opacity: 0, scale: 0.7 }}
+              transition={{ duration: 0.18 }}
+            >
+              {isDark
+                ? <Moon size={14} />
+                : <Sun size={14} className="text-amber-500" />
+              }
+            </motion.div>
+          </AnimatePresence>
+        </button>
+      )}
     </header>
   );
 }
