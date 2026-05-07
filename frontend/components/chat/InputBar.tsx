@@ -20,8 +20,6 @@ interface InputBarProps {
   onSend: (query: string) => void;
   onStop: () => void;
   isStreaming: boolean;
-  disabled?: boolean;
-  placeholder?: string;
   collectionId: string;
   onCollectionChange: (id: string) => void;
 }
@@ -33,7 +31,7 @@ function formatBytes(b: number) {
 }
 
 export function InputBar({
-  onSend, onStop, isStreaming, disabled, placeholder, collectionId, onCollectionChange,
+  onSend, onStop, isStreaming, collectionId, onCollectionChange,
 }: InputBarProps) {
   const [value, setValue] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -109,7 +107,7 @@ export function InputBar({
 
   const clearDone = () => setFiles((prev) => prev.filter((f) => f.status !== "done"));
   const removeFile = (i: number) => setFiles((prev) => prev.filter((_, idx) => idx !== i));
-  const canSend = value.trim().length > 0 && !isStreaming && !disabled;
+  const canSend = value.trim().length > 0 && !isStreaming;
   const pendingCount = files.filter((f) => f.status === "pending").length;
   const doneCount = files.filter((f) => f.status === "done").length;
 
@@ -241,9 +239,9 @@ export function InputBar({
             value={value}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder={placeholder ?? "Ask about CMS, FSA, IRS, VA policies… (Enter to send)"}
+            placeholder={collectionId ? "Ask about your uploaded document… (Enter to send)" : "Ask a question… (Enter to send)"}
             rows={1}
-            disabled={disabled}
+            disabled={false}
             className={cn(
               "flex-1 bg-transparent text-sm text-[var(--fg)] placeholder:text-[var(--muted)]",
               "resize-none outline-none min-h-[24px] max-h-[180px] leading-relaxed",

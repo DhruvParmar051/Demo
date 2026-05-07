@@ -7,10 +7,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   MessageSquare, Upload, BarChart3,
   ChevronLeft, ChevronRight,
-  Zap, Plus, Sparkles, X, Menu,
+  Zap, Plus, Sparkles, X, Menu, Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import type { ChatSession } from "@/hooks/useChatSessions";
 
 const navItems = [
   { href: "/chat",      icon: MessageSquare, label: "Chat" },
@@ -19,18 +20,29 @@ const navItems = [
 ];
 
 interface SidebarProps {
+  sessions?: ChatSession[];
+  activeSessionId?: string;
   onNewChat?: () => void;
+  onSwitchChat?: (id: string) => void;
 }
 
-export function Sidebar({ onNewChat }: SidebarProps) {
+function formatRelativeTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+export function Sidebar({ sessions = [], activeSessionId = "", onNewChat, onSwitchChat }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
 
-  // Close mobile sidebar on route change
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
-  // Close on outside tap
   useEffect(() => {
     if (!mobileOpen) return;
     const handler = (e: TouchEvent | MouseEvent) => {
@@ -44,6 +56,8 @@ export function Sidebar({ onNewChat }: SidebarProps) {
       document.removeEventListener("touchstart", handler);
     };
   }, [mobileOpen]);
+
+  const isOnChat = pathname.startsWith("/chat");
 
   const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
     <div
@@ -101,6 +115,35 @@ export function Sidebar({ onNewChat }: SidebarProps) {
           </AnimatePresence>
         </button>
       </div>
+
+      {/* Chat history — only visible on chat page, when expanded */}
+      {isOnChat && (!collapsed || mobile) && sessions.length > 0 && (
+        <div className="px-3 pb-2">
+          <div className="flex items-center gap-1.5 px-1 mb-1.5">
+            <Clock size={11} className="text-[var(--muted)]" />
+            <span className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wide">History</span>
+          </div>
+          <div className="space-y-0.5 max-h-48 overflow-y-auto no-scrollbar">
+            {[...sessions]
+              .sort((a, b) => b.createdAt - a.createdAt)
+              .map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => { onSwitchChat?.(s.id); setMobileOpen(false); }}
+                  className={cn(
+                    "w-full text-left px-2.5 py-2 rounded-lg text-xs transition-all duration-150",
+                    s.id === activeSessionId
+                      ? "bg-accent/12 text-accent border border-accent/20"
+                      : "text-[var(--muted-2)] hover:text-[var(--fg)] hover:bg-[var(--glass-bg)]"
+                  )}
+                >
+                  <p className="truncate font-medium leading-snug">{s.title}</p>
+                  <p className="text-[10px] text-[var(--muted)] mt-0.5">{formatRelativeTime(s.createdAt)}</p>
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-2 space-y-1">
@@ -161,7 +204,6 @@ export function Sidebar({ onNewChat }: SidebarProps) {
 
   return (
     <>
-      {/* Desktop sidebar */}
       <motion.aside
         initial={false}
         animate={{ width: collapsed ? 64 : 220 }}
@@ -171,7 +213,6 @@ export function Sidebar({ onNewChat }: SidebarProps) {
         <SidebarContent />
       </motion.aside>
 
-      {/* Mobile hamburger button */}
       <button
         onClick={() => setMobileOpen(true)}
         className="md:hidden fixed top-3 left-3 z-50 w-9 h-9 rounded-xl glass-card flex items-center justify-center text-[var(--muted)] hover:text-[var(--fg)] transition-colors"
@@ -180,7 +221,6 @@ export function Sidebar({ onNewChat }: SidebarProps) {
         <Menu size={18} />
       </button>
 
-      {/* Mobile drawer */}
       <AnimatePresence>
         {mobileOpen && (
           <>

@@ -383,11 +383,27 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
             raise HTTPException(status_code=500, detail=f"Retrieval failed: {exc}")
 
         if not results:
-            empty = QueryResponse(
-                answer="No relevant content found in your uploaded documents.",
-                confidence=0.0,
+            from src.tools.executor import ToolExecutor
+            from pathlib import Path as _Path
+            _ticket_db = _Path(config.data.audit_db_path).parent / "tickets.db"
+            _executor = ToolExecutor(retriever=None, ticket_store_path=_ticket_db)
+            ticket_result = _executor.create_ticket(
+                query=req.query,
+                summary=f"Out-of-scope query (no matching document content): {req.query[:200]}",
+                category="other",
+                severity="medium",
             )
-            return empty.to_dict()
+            escalation = QueryResponse(
+                answer=(
+                    "I couldn't find relevant information in your uploaded documents to answer this question. "
+                    f"A support ticket has been created (ID: {ticket_result['ticket_id']}). "
+                    f"A specialist will follow up within {ticket_result['estimated_response_time']}."
+                ),
+                confidence=0.0,
+                ticket_id=ticket_result["ticket_id"],
+            )
+            await asyncio.to_thread(audit.log, escalation, req.model_tag, req.query)
+            return escalation.to_dict()
 
         # Reuse the already-loaded M5 generator — no extra model loading.
         pipeline = await registry.get("m5")
