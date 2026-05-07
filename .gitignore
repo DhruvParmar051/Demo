@@ -55,6 +55,7 @@ checkpoints/
 *.pt
 *.pth
 *.ckpt
+*.pdf
 
 # --- Data (large files) ---
 # synthetic/ is small (6.9 MB) and tracked — needed to train on Colab/HPC
