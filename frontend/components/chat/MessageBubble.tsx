@@ -63,23 +63,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         </div>
 
         {/* Attached files — shown above the text bubble for user messages */}
-        {hasFiles && (
-          <div className="flex flex-wrap gap-2 mb-2 justify-end">
-            {message.attachedFiles!.map((f, i) => (
-              <div key={i} className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] max-w-[200px]">
-                <div className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center flex-shrink-0">
-                  <FileText size={14} className="text-accent-3" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-[var(--fg)] truncate leading-tight">{f.name}</p>
-                  <p className="text-[10px] text-[var(--muted)] mt-0.5">
-                    {fileIcon(f.type)} · {formatBytes(f.size)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        
 
         {/* Bubble */}
         <div className={cn(
