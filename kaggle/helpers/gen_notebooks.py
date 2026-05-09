@@ -159,7 +159,7 @@ nb01 = nb([
 nb02 = nb([
     md("""
     # AegisRAG · Stage 02 — Reranker Fine-tune
-    Cross-encoder fine-tune of `jinaai/jina-colbert-v2` on (query, passage, label) pairs constructed from `qa_pairs.jsonl` at `pos_neg_ratio=2.0`.
+    Cross-encoder fine-tune of `BAAI/bge-reranker-base` on (query, passage, label) pairs constructed from `qa_pairs.jsonl` at `pos_neg_ratio=2.0`.
     ~30 min on T4.
     Attach: `aegisrag-source`, `aegisrag-synthetic`.
     """),

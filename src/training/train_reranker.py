@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 from typing import Any
 from tqdm import tqdm
+import torch
 
 from src.utils.config import get_config
 from src.utils.determinism import set_seed
@@ -27,6 +28,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+torch.backends.cuda.enable_flash_sdp(False)
+torch.backends.cuda.enable_mem_efficient_sdp(False)
+torch.backends.cuda.enable_math_sdp(True)
 
 def _build_pairs(qa: list[dict[str, Any]], pos_neg_ratio: float) -> list[dict[str, Any]]:
     """Build list of {query, passage, label} dicts."""
@@ -121,7 +125,7 @@ def train(cfg: Any = None) -> dict[str, Any]:
         """Custom wrapper to handle Jina's XLMRobertaFlashConfig."""
         def __init__(self, model_name: str):
             super().__init__()
-            self.encoder = AutoModel.from_pretrained(model_name, trust_remote_code=True)
+            self.encoder = AutoModel.from_pretrained(model_name, trust_remote_code=True,  attn_implementation="eager")
             self.classifier = nn.Linear(self.encoder.config.hidden_size, 1)
 
         def forward(self, **kwargs):

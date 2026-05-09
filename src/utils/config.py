@@ -31,7 +31,7 @@ class RetrieverModelConfig(BaseModel):
 
 
 class RerankerModelConfig(BaseModel):
-    name: str = "jinaai/jina-colbert-v2"
+    name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     max_seq_length: int = 8192
     max_query_length: int = 128
 

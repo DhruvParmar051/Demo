@@ -15,7 +15,7 @@ models:
     pooling_method: "cls"
 
   reranker:
-    name: "jinaai/jina-colbert-v2"
+    name: "cross-encoder/ms-marco-MiniLM-L-6-v2"
     max_seq_length: 8192
     max_query_length: 128
 
@@ -29,7 +29,7 @@ models:
     do_sample: true
     gguf_path: "checkpoints/aegis_final.gguf"
     gguf_n_ctx: 4096
-    gguf_n_gpu_layers: 0  # 0 = CPU only (MPS Metal crashes with quantized attention shapes)
+    gguf_n_gpu_layers: 0 # 0 = CPU only (MPS Metal crashes with quantized attention shapes)
 
   nli:
     name: "cross-encoder/nli-MiniLM2-L6-H768"
@@ -63,12 +63,12 @@ retrieval:
 # ---------------------------------------------------------------------------
 cgal:
   max_iterations: 3
-  high_confidence: 0.35   # answer directly; calibrated to observed conf-head range 0.20-0.36
-  medium_confidence: 0.25  # NLI-verify before returning; triggers for mid-range outputs
-  low_confidence: 0.15     # retry; below this escalate immediately
+  high_confidence: 0.35 # answer directly; calibrated to observed conf-head range 0.20-0.36
+  medium_confidence: 0.25 # NLI-verify before returning; triggers for mid-range outputs
+  low_confidence: 0.15 # retry; below this escalate immediately
   # below low_confidence: escalate / return "I don't know"
-  verify_low: 0.40         # NLI entailment threshold
-  verify_high: 0.55        # high-confidence NLI accept
+  verify_low: 0.40 # NLI entailment threshold
+  verify_high: 0.55 # high-confidence NLI accept
   escalation_message: "I'm not confident enough to answer this accurately. Let me connect you with a human agent."
   enable_query_decomposition: true
   decomposition_threshold: 0.35 # lowered to match new scale
@@ -101,7 +101,7 @@ training:
     weight_decay: 0.01
     max_grad_norm: 1.0
     negatives_per_query: 7
-    hard_negatives: 7          # alias read by train_retriever.py
+    hard_negatives: 7 # alias read by train_retriever.py
     hard_negative_mining: true
     in_batch_negatives: true
     loss: "infonce" # infonce | triplet_margin
@@ -117,7 +117,7 @@ training:
     weight_decay: 0.01
     max_grad_norm: 1.0
     max_seq_length: 512
-    pos_neg_ratio: 2.0         # negatives per positive; read by train_reranker.py
+    pos_neg_ratio: 2.0 # negatives per positive; read by train_reranker.py
     loss: "cross_entropy"
     label_smoothing: 0.1
     output_dir: "checkpoints/reranker"
