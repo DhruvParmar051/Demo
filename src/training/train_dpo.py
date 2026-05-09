@@ -247,7 +247,7 @@ def train(cfg: Any = None) -> dict[str, Any]:
         remove_unused_columns=False,
         dataloader_num_workers=0,
         dataloader_pin_memory=False,
-        label_smoothing=0.1,
+        label_smoothing_factor=0.1,
     )
 
     trainer = DPOTrainer(

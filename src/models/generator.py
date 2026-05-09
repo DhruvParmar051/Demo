@@ -332,12 +332,16 @@ class Generator:
             except Exception as exc:
                 logger.warning("bitsandbytes 4-bit load failed (%s); "
                                "falling back to fp16.", exc)
-                load_kwargs["torch_dtype"] = torch.float16
+                load_kwargs["dtype"] = torch.float16
                 load_kwargs["device_map"] = "auto"
         elif self.device_str == "mps":
-            load_kwargs["torch_dtype"] = torch.float16
+            # MPS SDPA kernels mishandle GQA shapes (e.g. Qwen2.5 28q/4kv heads)
+            # and produce "incompatible dimensions" LLVM errors at runtime.
+            # Eager attention uses PyTorch's pure-Python path and is stable.
+            load_kwargs["dtype"] = torch.float16
+            load_kwargs["attn_implementation"] = "eager"
         else:
-            load_kwargs["torch_dtype"] = torch.float32
+            load_kwargs["dtype"] = torch.float32
 
         self._model = AutoModelForCausalLM.from_pretrained(name, **load_kwargs)
         if "device_map" not in load_kwargs:

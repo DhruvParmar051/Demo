@@ -86,6 +86,9 @@ class _BaselineBase:
             model_tag=self.model_tag,
         )
 
+    def __call__(self, query: str) -> QueryResponse:
+        return self.run(query)
+
 
 class BaselineB1(_BaselineBase):
     """Dense-only + Qwen baseline.

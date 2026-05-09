@@ -300,6 +300,9 @@ class M5Pipeline:
                 response.confidence = _StubConfidenceHead.PUBLIC_CONFIDENCE
         return response
 
+    def __call__(self, query: str) -> Any:
+        return self.run(query)
+
 
 class _StubConfidenceHead:
     """No-op confidence head for pipelines where CGAL is disabled (M1).

@@ -207,7 +207,7 @@ class PreferenceTriplet:
         "no_citation",
         "verbose_unfaithful",
         "wrong_tool",
-        "incomplete_answer",
+        "partial_truncation",
         "unsafe_tone",
     ]
     pref_id: str = field(default_factory=lambda: str(uuid.uuid4()))

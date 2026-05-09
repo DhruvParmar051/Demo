@@ -1,7 +1,7 @@
 """Evaluate all 8 pipelines (b1-b3, m1-m5) on the test set and generate the report.
 
 Usage:
-    python scripts/evaluate_all.py --test-dir data/test --output-dir report
+    python scripts/evaluate_all.py --test-dir data/synthetic/test/qa_pairs.jsonl --output-dir report
 """
 
 from __future__ import annotations
@@ -13,6 +13,10 @@ import logging
 import os
 import sys
 from pathlib import Path
+
+# Use locally cached HuggingFace models; avoid unnecessary hub HTTP requests.
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -69,7 +73,7 @@ def _free_pipeline(pipeline) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--test-dir", default="data/test/qa_pairs.jsonl")
+    parser.add_argument("--test-dir", default="data/synthetic/test/qa_pairs.jsonl")
     parser.add_argument("--output-dir", default="report")
     parser.add_argument("--models", default=",".join(_TAGS))
     args = parser.parse_args()

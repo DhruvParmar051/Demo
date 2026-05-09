@@ -15,7 +15,7 @@ models:
     pooling_method: "cls"
 
   reranker:
-    name: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    name: "jinaai/jina-colbert-v2"
     max_seq_length: 8192
     max_query_length: 128
 
@@ -101,6 +101,7 @@ training:
     weight_decay: 0.01
     max_grad_norm: 1.0
     negatives_per_query: 7
+    hard_negatives: 7          # alias read by train_retriever.py
     hard_negative_mining: true
     in_batch_negatives: true
     loss: "infonce" # infonce | triplet_margin
@@ -116,6 +117,7 @@ training:
     weight_decay: 0.01
     max_grad_norm: 1.0
     max_seq_length: 512
+    pos_neg_ratio: 2.0         # negatives per positive; read by train_reranker.py
     loss: "cross_entropy"
     label_smoothing: 0.1
     output_dir: "checkpoints/reranker"

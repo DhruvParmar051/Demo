@@ -84,10 +84,22 @@ def _load_results(results_path: Path) -> dict[str, Any]:
     elif "model_tag" in raw:
         out[raw["model_tag"]] = raw
     else:
-        # Assume raw is already {tag: result-dict}
+        # Assume raw is already {tag: result-dict} OR {tag: flat-aggregate-dict}.
+        # evaluate_all.py writes all_results.json as {tag: flat-aggregate-dict}
+        # (not wrapped under "aggregate"). Normalise both forms and sideload the
+        # per-model JSON (which contains the full per_query list) when available.
         for tag, v in raw.items():
-            if isinstance(v, dict):
+            if not isinstance(v, dict):
+                continue
+            per_path = results_path.parent / f"{tag}.json"
+            if per_path.exists():
+                with open(per_path, "r", encoding="utf-8") as fh:
+                    out[tag] = json.load(fh)
+            elif "aggregate" in v:
                 out[tag] = v
+            else:
+                # Flat aggregate dict — wrap it so downstream consumers work.
+                out[tag] = {"model_tag": tag, "aggregate": v, "per_query": []}
     return out
 
 

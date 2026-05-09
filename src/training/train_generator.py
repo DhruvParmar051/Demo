@@ -50,25 +50,39 @@ def _format_example(rec: dict[str, Any]) -> dict[str, str]:
 def _gpu_profile() -> dict[str, Any]:
     """Return VRAM, bf16 support, FA2 availability, and torch version info."""
     import torch
-    props = torch.cuda.get_device_properties(0)
-    vram_gb = props.total_memory / 1024 ** 3
-    is_ampere_plus = props.major >= 8         
-    bf16_ok = torch.cuda.is_bf16_supported()
-    
-    fa2_ok = False
-    if is_ampere_plus:
-        try:
-            import flash_attn  # noqa: F401
-            fa2_ok = True
-        except ImportError:
-            pass
- 
-  
-    compile_ok = hasattr(torch, "compile") and is_ampere_plus
- 
+
+    if torch.cuda.is_available():
+        props = torch.cuda.get_device_properties(0)
+        vram_gb = props.total_memory / 1024 ** 3
+        is_ampere_plus = props.major >= 8
+        bf16_ok = torch.cuda.is_bf16_supported()
+        fa2_ok = False
+        if is_ampere_plus:
+            try:
+                import flash_attn  # noqa: F401
+                fa2_ok = True
+            except ImportError:
+                pass
+        compile_ok = hasattr(torch, "compile") and is_ampere_plus
+        device_name = props.name
+    elif torch.backends.mps.is_available():
+        vram_gb = 0.0   # unified memory; no reliable API to query total
+        is_ampere_plus = False
+        bf16_ok = False  # bf16 causes NaN on MPS with many models
+        fa2_ok = False
+        compile_ok = False
+        device_name = "Apple MPS"
+    else:
+        vram_gb = 0.0
+        is_ampere_plus = False
+        bf16_ok = False
+        fa2_ok = False
+        compile_ok = False
+        device_name = "CPU"
+
     logger.info(
-        "GPU: %s | VRAM: %.1f GB | bf16: %s | FA2: %s | compile: %s",
-        props.name, vram_gb, bf16_ok, fa2_ok, compile_ok,
+        "Device: %s | VRAM: %.1f GB | bf16: %s | FA2: %s | compile: %s",
+        device_name, vram_gb, bf16_ok, fa2_ok, compile_ok,
     )
     return {
         "vram_gb": vram_gb,
@@ -76,6 +90,7 @@ def _gpu_profile() -> dict[str, Any]:
         "bf16_ok": bf16_ok,
         "fa2_ok": fa2_ok,
         "compile_ok": compile_ok,
+        "device_name": device_name,
     }
  
  
@@ -89,10 +104,15 @@ def train(cfg: Any = None) -> dict[str, Any]:
     except ImportError:
         return {"status": "skipped", "reason": "no_torch"}
  
-    if not torch.cuda.is_available():
-        logger.warning("CUDA unavailable -- skipping generator SFT.")
-        return {"status": "skipped", "reason": "cpu_only"}
- 
+    _cuda = torch.cuda.is_available()
+    _mps = torch.backends.mps.is_available()
+    if not _cuda and not _mps:
+        logger.warning(
+            "No GPU detected (CUDA/MPS). Generator SFT will run on CPU with "
+            "reduced batch size and fp32. This is very slow — consider using "
+            "a Kaggle T4 or Colab GPU instead."
+        )
+
     try:
         from transformers import (
             AutoModelForCausalLM,
@@ -133,32 +153,57 @@ def train(cfg: Any = None) -> dict[str, Any]:
         tokenizer.pad_token = tokenizer.eos_token
  
     # ── Model loading ────────────────────────────────────────────────────────
-    bnb = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16 if gpu["bf16_ok"] else torch.float16,
-        bnb_4bit_use_double_quant=True,   # saves ~0.4 GB, free perf
-    )
- 
-    model_kwargs: dict[str, Any] = dict(
-        quantization_config=bnb,
-        device_map="auto",
-        trust_remote_code=True,
-    )
+    # BitsAndBytesConfig (4-bit NF4) is only supported on CUDA.
+    # MPS and CPU fall back to fp32 full-precision loading.
+    model_kwargs: dict[str, Any] = dict(trust_remote_code=True)
+
+    if torch.cuda.is_available():
+        bnb = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16 if gpu["bf16_ok"] else torch.float16,
+            bnb_4bit_use_double_quant=True,
+        )
+        model_kwargs["quantization_config"] = bnb
+        model_kwargs["device_map"] = "auto"
+        model_kwargs["torch_dtype"] = torch.bfloat16 if gpu["bf16_ok"] else torch.float16
+    elif torch.backends.mps.is_available():
+        # MPS: load in fp32; no 4-bit quant support on Apple Silicon
+        model_kwargs["device_map"] = "mps"
+        model_kwargs["torch_dtype"] = torch.float32
+        logger.info("MPS detected — loading in fp32 (no 4-bit quant on Apple Silicon)")
+    else:
+        model_kwargs["device_map"] = "cpu"
+        model_kwargs["torch_dtype"] = torch.float32
+        logger.info("CPU fallback — training will be very slow")
+
     if gpu["fa2_ok"]:
         model_kwargs["attn_implementation"] = "flash_attention_2"
         logger.info("Flash-Attention-2 enabled")
+    elif torch.backends.mps.is_available() and not torch.cuda.is_available():
+        # MPS SDPA kernels crash on GQA models (e.g. Qwen2.5 28q/4kv heads)
+        # with "incompatible dimensions" LLVM abort. Eager is stable on MPS.
+        model_kwargs["attn_implementation"] = "eager"
+        logger.info("Using eager attention (MPS SDPA GQA workaround)")
     else:
-        # SDPA is the next-best option (built into PyTorch >= 2.0)
         model_kwargs["attn_implementation"] = "sdpa"
         logger.info("Using SDPA attention (FA2 not available)")
- 
+
     model = AutoModelForCausalLM.from_pretrained(name, **model_kwargs)
-    model = prepare_model_for_kbit_training(
-        model,
-        use_gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False},
-    )
+
+    if torch.cuda.is_available():
+        model = prepare_model_for_kbit_training(
+            model,
+            use_gradient_checkpointing=True,
+            gradient_checkpointing_kwargs={"use_reentrant": False},
+        )
+    else:
+        # prepare_model_for_kbit_training is a no-op / crashes without CUDA quant
+        model.enable_input_require_grads()
+        if hasattr(model, "gradient_checkpointing_enable"):
+            model.gradient_checkpointing_enable(
+                gradient_checkpointing_kwargs={"use_reentrant": False}
+            )
  
     # ── LoRA / DoRA ──────────────────────────────────────────────────────────
     lcfg_yaml = cfg.lora
@@ -179,16 +224,27 @@ def train(cfg: Any = None) -> dict[str, Any]:
         model = torch.compile(model)
  
     tcfg = cfg.training.generator_sft
- 
-    if gpu["vram_gb"] < 20:
+
+    _on_cuda = torch.cuda.is_available()
+    _on_mps = torch.backends.mps.is_available()
+
+    if not _on_cuda:
+        # MPS / CPU: must use fp32, smallest possible batch
         micro_batch = 1
-        grad_accum  = 8          # was 32  ← biggest single speedup
-        max_seq     = min(int(tcfg.max_seq_length), 512)   # was 1024
+        grad_accum  = 16
+        max_seq     = min(int(tcfg.max_seq_length), 256)
         logger.info(
-            "T4 profile: batch=1, grad_accum=8, max_seq=%d (was 32/1024)", max_seq
+            "Non-CUDA profile (device=%s): batch=1, grad_accum=16, max_seq=%d",
+            gpu["device_name"], max_seq,
+        )
+    elif gpu["vram_gb"] < 20:
+        micro_batch = 1
+        grad_accum  = 8
+        max_seq     = min(int(tcfg.max_seq_length), 512)
+        logger.info(
+            "T4 profile: batch=1, grad_accum=8, max_seq=%d", max_seq
         )
     else:
-        
         micro_batch = int(tcfg.batch_size)
         grad_accum  = int(tcfg.gradient_accumulation_steps)
         max_seq     = int(tcfg.max_seq_length)
@@ -215,7 +271,7 @@ def train(cfg: Any = None) -> dict[str, Any]:
     ds = ds.map(
         _tokenize,
         remove_columns=["prompt", "response"],
-        num_proc=4,      
+        num_proc=4 if _on_cuda else 1,
         desc="Tokenising",
     )
  
@@ -227,14 +283,27 @@ def train(cfg: Any = None) -> dict[str, Any]:
         if last_checkpoint:
             logger.info("Resuming from checkpoint: %s", last_checkpoint)
  
-    try:
-        import apex  # noqa: F401
-        optim = "adamw_apex_fused"
-        logger.info("Using apex fused AdamW")
-    except ImportError:
-        optim = "paged_adamw_8bit"
-        logger.info("Using paged AdamW 8-bit")
- 
+    if _on_cuda:
+        try:
+            import apex  # noqa: F401
+            optim = "adamw_apex_fused"
+            logger.info("Using apex fused AdamW")
+        except ImportError:
+            optim = "paged_adamw_8bit"
+            logger.info("Using paged AdamW 8-bit")
+        _use_bf16 = gpu["bf16_ok"]
+        _use_fp16 = not gpu["bf16_ok"]
+        _pin_memory = True
+        _num_workers = 2
+    else:
+        # paged_adamw_8bit requires bitsandbytes CUDA; fall back to adamw_torch
+        optim = "adamw_torch"
+        logger.info("Using standard AdamW (no CUDA quantized optimizer)")
+        _use_bf16 = False
+        _use_fp16 = False   # fp32 on MPS/CPU
+        _pin_memory = False
+        _num_workers = 0
+
     args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=int(tcfg.num_epochs),
@@ -243,18 +312,18 @@ def train(cfg: Any = None) -> dict[str, Any]:
         learning_rate=float(tcfg.learning_rate),
         warmup_ratio=float(tcfg.warmup_ratio),
         lr_scheduler_type="cosine",
-        logging_steps=1,           
+        logging_steps=1,
         save_strategy="steps",
         save_steps=1,
         save_total_limit=3,
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         optim=optim,
-        bf16=gpu["bf16_ok"],
-        fp16=not gpu["bf16_ok"],
-        dataloader_num_workers=2,
-        dataloader_pin_memory=True,
-        dataloader_prefetch_factor=2,
+        bf16=_use_bf16,
+        fp16=_use_fp16,
+        dataloader_num_workers=_num_workers,
+        dataloader_pin_memory=_pin_memory,
+        dataloader_prefetch_factor=2 if _num_workers > 0 else None,
         seed=42,
         report_to=[],
     )
