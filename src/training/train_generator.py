@@ -29,10 +29,13 @@ logger = logging.getLogger(__name__)
 def _format_example(rec: dict[str, Any]) -> dict[str, str]:
     """Convert a QA record into (prompt, response) for SFT."""
     ctx_blocks = []
-    for cid, text in zip(
-        rec.get("gold_chunk_ids", []), rec.get("gold_chunk_texts", [])
-    ):
-        ctx_blocks.append(f"[{cid[:16]}:0-{len(text)}] {text}")
+    # QA records store gold_chunk_ids; context text lives in citations list.
+    for cit in rec.get("citations", []):
+        cid = cit.get("chunk_id", cit.get("doc_id", "unknown"))
+        text = cit.get("cited_text", "")
+        span_start = cit.get("span_start", 0)
+        span_end = cit.get("span_end", len(text))
+        ctx_blocks.append(f"[{cid[:16]}:{span_start}-{span_end}] {text}")
     ctx = "\n\n".join(ctx_blocks)
     system = (
         "You are AegisRAG, a grounded customer-support assistant. Cite every "

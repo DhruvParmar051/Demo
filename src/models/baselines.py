@@ -16,7 +16,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from src.data.schema import QueryResponse, RetrievalResult
+from src.data.schema import Citation, QueryResponse, RetrievalResult
 from src.models.generator import Generator
 from src.retrieval.bm25_index import BM25Index
 from src.retrieval.retriever import HybridRetriever
@@ -57,7 +57,14 @@ class _BaselineBase:
         self.vector_store = vector_store or ChromaVectorStore()
         self.bm25_index = bm25_index
         self.reranker = reranker
-        self.generator = generator or Generator()
+        # B1/B2 use the base (untrained) generator — explicitly pass aegis_base.gguf
+        # so they are never contaminated by SFT/DPO weights regardless of config defaults.
+        if generator is not None:
+            self.generator = generator
+        else:
+            cfg_gguf = getattr(cfg.models.generator, "gguf_path", "")
+            base_gguf = Path(cfg_gguf).parent / "aegis_base.gguf" if cfg_gguf else Path("checkpoints/aegis_base.gguf")
+            self.generator = Generator(gguf_path=str(base_gguf) if base_gguf.exists() else None)
 
     def _build_contexts(
         self, reranked: list[tuple[Any, float]]
@@ -89,6 +96,32 @@ class _BaselineBase:
     def __call__(self, query: str) -> QueryResponse:
         return self.run(query)
 
+    @staticmethod
+    def _citations_from_context(context: list[RetrievalResult]) -> list[Citation]:
+        """Build Citation objects directly from retrieved chunks.
+
+        generate_with_citations relies on parsing inline [doc_id:start-end]
+        markers from the answer text, but Generator.generate() strips those
+        markers before returning.  Building citations from the retrieved chunks
+        directly avoids empty citation lists on all baselines.
+        """
+        citations = []
+        for rr in context:
+            chunk = rr.chunk
+            cited_text = chunk.text.strip()
+            if len(cited_text) > 500:
+                cited_text = cited_text[:497] + "..."
+            citations.append(Citation(
+                doc_id=chunk.doc_id,
+                chunk_id=chunk.chunk_id,
+                span_start=chunk.span_start,
+                span_end=chunk.span_end,
+                cited_text=cited_text,
+                source=chunk.source,
+                page_number=chunk.page_number,
+            ))
+        return citations
+
 
 class BaselineB1(_BaselineBase):
     """Dense-only + Qwen baseline.
@@ -103,9 +136,9 @@ class BaselineB1(_BaselineBase):
         t_start = time.perf_counter()
         top_k = int(self.cfg.retrieval.rerank_top_k)
         dense = self.vector_store.query(query, top_k=top_k)
-        reranked = dense  # no rerank
-        context = self._build_contexts(reranked)
-        answer, citations = self.generator.generate_with_citations(query, context)
+        context = self._build_contexts(dense)
+        answer = self.generator.generate(query=query, context=context)
+        citations = self._citations_from_context(context)
         return self._to_response(query, answer, citations, t_start)
 
 
@@ -135,7 +168,8 @@ class BaselineB2(_BaselineBase):
             query, retrieved, top_k=int(self.cfg.retrieval.rerank_top_k)
         )
         context = self._build_contexts(reranked)
-        answer, citations = self.generator.generate_with_citations(query, context)
+        answer = self.generator.generate(query=query, context=context)
+        citations = self._citations_from_context(context)
         return self._to_response(query, answer, citations, t_start)
 
 
@@ -191,5 +225,6 @@ class BaselineB3(_BaselineBase):
             query, retrieved, top_k=int(self.cfg.retrieval.rerank_top_k)
         )
         context = self._build_contexts(reranked)
-        answer, citations = self.generator.generate_with_citations(query, context)
+        answer = self.generator.generate(query=query, context=context)
+        citations = self._citations_from_context(context)
         return self._to_response(query, answer, citations, t_start)

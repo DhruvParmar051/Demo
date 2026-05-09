@@ -134,7 +134,13 @@ class CGALLoopEngine:
         self.max_iterations = int(self.cfg.cgal.max_iterations)
         self.top_k = int(self.cfg.retrieval.top_k)
         self.rerank_top_k = int(self.cfg.retrieval.rerank_top_k)
-        self.enable_decomp = bool(self.cfg.cgal.enable_query_decomposition)
+        # Only enable decomposition when a decomposer is actually provided.
+        # Reading from config alone would enable it for m2/m3/m4 which have
+        # no decomposer object, causing silent no-ops on every query.
+        self.enable_decomp = (
+            decomposer is not None
+            and bool(self.cfg.cgal.enable_query_decomposition)
+        )
 
         # Cross-request query embedding cache (bounded LRU).
         self._emb_cache: OrderedDict[str, np.ndarray] = OrderedDict()
@@ -414,10 +420,27 @@ class CGALLoopEngine:
             response.cgal_iterations = it + 1
             return self._escalate(query, response, reason="low_confidence")
 
-        logger.info("Exhausted %d CGAL iterations; escalating.", self.max_iterations)
-        if last_state is not None:
+        # After exhausting iterations, generate a best-effort answer with the
+        # context accumulated so far rather than always escalating.  Pure
+        # escalation here means the generator is never called when the
+        # confidence head outputs values in the retry band (low_conf, med_conf),
+        # producing empty answers and zero metrics across the board.
+        logger.info(
+            "Exhausted %d CGAL iterations; generating best-effort answer.",
+            self.max_iterations,
+        )
+        if last_state is not None and last_state.reranked:
             response.confidence = last_state.confidence
             response.cgal_iterations = self.max_iterations
+            return self._finalize_answer(
+                query=query,
+                refined_query=last_state.refined_query,
+                state=last_state,
+                response=response,
+                run_verify=False,
+                confidence_before=None,
+                history=history,
+            )
         return self._escalate(query, response, reason="max_iterations")
 
     # ------------------------------------------------------------------

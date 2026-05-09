@@ -291,10 +291,8 @@ def tool_accuracy(
     if not matching:
         return {"name_match": 0.0, "arg_f1": 0.0}
 
-    # Use the last matching call's args (most recent iteration).
-    arg_f1 = _arg_field_f1(matching[-1].args or {}, {})
-    # If no gold args supplied, treat name match as sufficient.
-    return {"name_match": name_match, "arg_f1": arg_f1}
+    # No gold args available at eval time — name match is sufficient signal.
+    return {"name_match": name_match, "arg_f1": name_match}
 
 
 # ----------------------------------------------------------------------

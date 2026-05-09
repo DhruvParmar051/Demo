@@ -108,26 +108,39 @@ def train(cfg: Any = None) -> dict[str, Any]:
     def collate(batch: list[dict[str, Any]]) -> dict[str, Any]:
         queries = [b["query"] for b in batch]
         soft = torch.tensor([float(b["soft_label"]) for b in batch], dtype=torch.float32)
-        
-        # Gold tool indices.
-        tools = torch.tensor(
-            [
-                _TOOL_NAMES.index(tool_lookup.get(b["query"], "AnswerDirect"))
-                if tool_lookup.get(b["query"], "AnswerDirect") in _TOOL_NAMES
-                else 0
-                for b in batch
-            ],
-            dtype=torch.long,
-        )
-        
+
+        # Gold tool indices — default to SearchKB (not AnswerDirect) when the
+        # query has no explicit label, to avoid collapsing the tool head.
+        def _safe_tool(q: str) -> int:
+            t = tool_lookup.get(q, "SearchKB")
+            return _TOOL_NAMES.index(t) if t in _TOOL_NAMES else 1  # 1=SearchKB
+        tools = torch.tensor([_safe_tool(b["query"]) for b in batch], dtype=torch.long)
+
         q_emb = torch.tensor(
             encoder.encode(queries, normalize_embeddings=True),
             dtype=torch.float32,
         )
-        
+
+        # Retrieve top-5 evidence chunks per query and mean-pool their embeddings.
+        # Previously this was always zero, which caused the confidence head to
+        # ignore evidence entirely and collapse the tool policy to AnswerDirect.
         dim = q_emb.size(-1)
-        e_emb = torch.zeros(len(batch), dim, dtype=torch.float32)
-        
+        e_rows = []
+        for i, b in enumerate(batch):
+            try:
+                results = vstore.query_by_embedding(
+                    embedding=q_emb[i].numpy(), top_k=5
+                )
+                if results:
+                    texts = [r[0].text for r in results]
+                    embs = encoder.encode(texts, normalize_embeddings=True)
+                    e_rows.append(torch.tensor(embs, dtype=torch.float32).mean(0))
+                    continue
+            except Exception:
+                pass
+            e_rows.append(torch.zeros(dim, dtype=torch.float32))
+        e_emb = torch.stack(e_rows)
+
         return {"q_emb": q_emb, "e_emb": e_emb, "soft": soft, "tool": tools}
 
     # 3. Data split and Hyperparameters

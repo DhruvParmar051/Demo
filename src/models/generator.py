@@ -34,7 +34,7 @@ _STOP = [
 ]
 
 SYSTEM_PROMPT = (
-    "You are AegisRAG, a grounded document-understanding assistant. "
+    "You are AegisRAG, a grounded customer-support assistant. "
     "Answer the user's question using only the provided context sources. "
     "Write a thorough response of 5 to 6 sentences, covering the key details and explaining the concept clearly. "
     "Do not include reference markers, IDs, or bracket codes in your answer. "
@@ -241,15 +241,15 @@ class Generator:
 
         ctx_blocks: list[str] = []
         if context:
-            for i, item in enumerate(context):
+            for item in context:
                 chunk = getattr(item, "chunk", None) or item
-                doc_id = getattr(chunk, "doc_id", "")
+                doc_id = getattr(chunk, "doc_id", "") or ""
                 span_start = getattr(chunk, "span_start", 0)
-                span_end = getattr(chunk, "span_end", span_start + len(getattr(chunk, "text", "")))
                 text = getattr(chunk, "text", "") or getattr(chunk, "cited_text", "")
-                ctx_blocks.append(
-                    f"Source {i + 1}:\n{text}"
-                )
+                span_end = getattr(chunk, "span_end", span_start + len(text))
+                # Match the SFT training format: [doc_id[:16]:start-end] text
+                cid = doc_id[:16] if doc_id else "unknown"
+                ctx_blocks.append(f"[{cid}:{span_start}-{span_end}] {text}")
         context_str = "\n\n".join(ctx_blocks) if ctx_blocks else "(no context)"
         q = query or ""
 

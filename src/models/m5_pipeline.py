@@ -147,7 +147,20 @@ class M5Pipeline:
                 except Exception as exc:
                     logger.warning("BM25 load failed (%s); using empty index.", exc)
         self.bm25_index = bm25_index
-        self.reranker = reranker or ColBERTReranker()
+
+        if reranker is not None:
+            self.reranker = reranker
+        else:
+            reranker_ckpt = getattr(cfg.checkpoints, "reranker", None)
+            if reranker_ckpt and Path(reranker_ckpt).exists():
+                try:
+                    self.reranker = ColBERTReranker(checkpoint_path=reranker_ckpt)
+                    logger.info("Loaded fine-tuned reranker from %s", reranker_ckpt)
+                except Exception as exc:
+                    logger.warning("Fine-tuned reranker load failed (%s); using base.", exc)
+                    self.reranker = ColBERTReranker()
+            else:
+                self.reranker = ColBERTReranker()
 
         # Select the pre-merged GGUF for this variant so that adapter weights are
         # actually applied at inference time.  GGUF (llama-cpp) cannot load HF
@@ -196,7 +209,7 @@ class M5Pipeline:
                     self.confidence_head = ConfidenceHead()
             self.confidence_head.eval()
         else:
-            self.confidence_head = _StubConfidenceHead(high_conf=1.0)
+            self.confidence_head = _StubConfidenceHead()
 
         # Alpha network only in M5 -- load from checkpoint when available.
         if not flags.adaptive_alpha:
@@ -220,8 +233,13 @@ class M5Pipeline:
             else:
                 self.alpha_network = None
 
-        # Verifier only enabled when flag is set.
-        self.answer_verify = answer_verify if flags.verify else None
+        # Verifier only enabled when flag is set (m4, m5).
+        if not flags.verify:
+            self.answer_verify = None
+        elif answer_verify is not None:
+            self.answer_verify = answer_verify
+        else:
+            self.answer_verify = AnswerVerify()
         if self.answer_verify is not None and hasattr(self.answer_verify, "warmup"):
             logger.info("Starting AnswerVerify warmup in background thread")
             threading.Thread(

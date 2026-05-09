@@ -86,17 +86,17 @@ class RetrievalConfig(BaseModel):
 
 class CGALConfig(BaseModel):
     max_iterations: int = 3
-    high_confidence: float = 0.85
-    medium_confidence: float = 0.75
-    low_confidence: float = 0.40
-    verify_low: float = 0.75
-    verify_high: float = 0.85
+    high_confidence: float = 0.35
+    medium_confidence: float = 0.25
+    low_confidence: float = 0.15
+    verify_low: float = 0.40
+    verify_high: float = 0.55
     escalation_message: str = (
         "I'm not confident enough to answer this accurately. "
         "Let me connect you with a human agent."
     )
     enable_query_decomposition: bool = True
-    decomposition_threshold: float = 0.60
+    decomposition_threshold: float = 0.35
 
 
 class RetrieverTrainingConfig(BaseModel):
