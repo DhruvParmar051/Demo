@@ -352,6 +352,7 @@ def train(cfg: Any = None) -> dict[str, Any]:
         **load_kwargs,
     )
 
+    base = base.to(torch.float16)
     # Important for Qwen tensor partitioning stability.
     base.config.pretraining_tp = 1
 
