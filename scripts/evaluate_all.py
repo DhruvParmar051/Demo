@@ -76,6 +76,8 @@ def main() -> None:
     parser.add_argument("--test-dir", default="data/synthetic/test/qa_pairs.jsonl")
     parser.add_argument("--output-dir", default="report")
     parser.add_argument("--models", default=",".join(_TAGS))
+    parser.add_argument("--limit", type=int, default=None,
+                        help="Evaluate on first N queries only (mini-batch / smoke test)")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -83,6 +85,9 @@ def main() -> None:
 
     tags = [t.strip().lower() for t in args.models.split(",") if t.strip()]
     evaluator = Evaluator(Path(args.test_dir), Path(args.output_dir))
+    if args.limit:
+        evaluator.test_set = evaluator.test_set[: args.limit]
+        logging.info("Mini-batch mode: evaluating on %d queries", len(evaluator.test_set))
 
     # Evaluate one model at a time to avoid holding all weights in memory.
     aggregate_results: dict[str, dict] = {}

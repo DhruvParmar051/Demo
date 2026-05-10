@@ -21,13 +21,14 @@ import numpy as np
 from src.data.schema import Citation, QueryResponse, ToolCall
 from src.evaluation.fcrs import compute_fcrs
 from src.evaluation.metrics import (
-    answer_quality,
     cgal_efficiency,
     citation_f1,
+    context_rouge,
     decomposition_accuracy,
     escalation_f1,
     grounding_score,
     recall_at_k,
+    rouge_scores,
     tool_accuracy,
 )
 
@@ -246,14 +247,22 @@ class Evaluator:
                 else:
                     row["recall_at_20"] = float("nan")
 
-            if gold_answer and not getattr(self, "_skip_bertscore", False):
-                try:
-                    row["bertscore_f1"] = answer_quality(response.answer, gold_answer)
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning("BERTScore failed on query %d: %s", idx, exc)
-                    row["bertscore_f1"] = float("nan")
+            row["bertscore_f1"] = float("nan")  # removed — use ROUGE instead
+
+            # ROUGE scores — fast, no model needed
+            if gold_answer:
+                rouge = rouge_scores(response.answer, gold_answer)
+                row["rouge1"] = rouge["rouge1"]
+                row["rouge2"] = rouge["rouge2"]
+                row["rougeL"] = rouge["rougeL"]
             else:
-                row["bertscore_f1"] = float("nan")
+                row["rouge1"] = row["rouge2"] = row["rougeL"] = float("nan")
+
+            # Context ROUGE — ROUGE between answer and retrieved chunk text
+            ctx_r = context_rouge(response.answer, grounding_cits)
+            row["ctx_rouge1"] = ctx_r["ctx_rouge1"]
+            row["ctx_rouge2"] = ctx_r["ctx_rouge2"]
+            row["ctx_rougeL"] = ctx_r["ctx_rougeL"]
 
             if needed_tool:
                 row["tool_accuracy"] = tool_accuracy(response.tool_calls, needed_tool)
@@ -305,9 +314,12 @@ class Evaluator:
         aggregate["citation_recall"] = self._nan_mean(
             [r["citation_f1"]["recall"] for r in per_query]
         )
-        aggregate["bertscore_f1"] = self._nan_mean(
-            [r["bertscore_f1"] for r in per_query]
-        )
+        aggregate["rouge1"] = self._nan_mean([r.get("rouge1", float("nan")) for r in per_query])
+        aggregate["rouge2"] = self._nan_mean([r.get("rouge2", float("nan")) for r in per_query])
+        aggregate["rougeL"] = self._nan_mean([r.get("rougeL", float("nan")) for r in per_query])
+        aggregate["ctx_rouge1"] = self._nan_mean([r.get("ctx_rouge1", float("nan")) for r in per_query])
+        aggregate["ctx_rouge2"] = self._nan_mean([r.get("ctx_rouge2", float("nan")) for r in per_query])
+        aggregate["ctx_rougeL"] = self._nan_mean([r.get("ctx_rougeL", float("nan")) for r in per_query])
         aggregate["recall_at_20"] = self._nan_mean(
             [r["recall_at_20"] for r in per_query]
         )

@@ -3,12 +3,9 @@ AegisRAG - Baseline Pipelines (B1, B2, B3)
 
 Three single-pass baselines without CGAL/DPO/verify/decomposition:
 
-- **B1**  Dense-only (BGE-m3 + Chroma), top-5, zero-shot Qwen2.5.
-- **B2**  Dense + BM25 hybrid (fixed alpha=0.5) + ColBERT rerank + zero-shot.
-- **B3**  Fine-tuned retriever + fine-tuned reranker + SFT adapter.
-
-python scripts/evaluate_all.py --models m2 --output-dir report
-
+- **B1**  BM25 only + base Qwen2.5 (sparse retrieval baseline).
+- **B2**  Dense only (BGE-m3 + Chroma) + base Qwen2.5.
+- **B3**  Hybrid retrieval (Dense + BM25, fixed alpha=0.5) + ColBERT rerank + base Qwen2.5.
 """
 
 from __future__ import annotations
@@ -148,22 +145,23 @@ class _BaselineBase:
 
 
 class BaselineB1(_BaselineBase):
-    """Dense-only + Qwen baseline.
-
-    Uses the Chroma vector store directly (no BM25, no reranker), forces
-    ``alpha=1.0``. Represents a minimal RAG system.
-    """
+    """B1 — BM25 only + base Qwen. Pure sparse retrieval baseline."""
 
     model_tag = "b1"
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if self.bm25_index is None:
+            self.bm25_index = _load_bm25(_bm25_path_from_cfg(self.cfg))
 
     def run(self, query: str) -> QueryResponse:
         t_start = time.perf_counter()
         top_k = int(self.cfg.retrieval.top_k)
         max_cit = int(getattr(self.cfg.retrieval, "max_citations", 5))
-        dense = self.vector_store.query(query, top_k=top_k)
-        context = self._build_contexts(dense[:max(max_cit, 5)])
+        # BM25 only — pure sparse retrieval
+        bm25_results = self.bm25_index.query(query, top_k=top_k)
+        context = self._build_contexts(bm25_results[:max(max_cit, 5)])
         answer = self.generator.generate(query=query, context=context)
-        # B1 has no reranker scores — cite all for both precision and grounding
         citations = self._citations_from_context(context, use_score_filter=False)
         resp = self._to_response(query, answer, citations, t_start)
         resp.grounding_citations = citations
@@ -171,62 +169,36 @@ class BaselineB1(_BaselineBase):
 
 
 class BaselineB2(_BaselineBase):
-    """Hybrid (fixed alpha=0.5) + ColBERT rerank + Qwen baseline."""
+    """B2 — Dense only (BGE-m3) + base Qwen. Pure dense retrieval baseline."""
 
     model_tag = "b2"
 
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        if self.bm25_index is None:
-            self.bm25_index = _load_bm25(_bm25_path_from_cfg(self.cfg))
-        if self.reranker is None:
-            self.reranker = ColBERTReranker()
-        self.retriever = HybridRetriever(
-            vector_store=self.vector_store,
-            bm25_index=self.bm25_index,
-            alpha_network=None,
-        )
-
     def run(self, query: str) -> QueryResponse:
         t_start = time.perf_counter()
+        top_k = int(self.cfg.retrieval.top_k)
         max_cit = int(getattr(self.cfg.retrieval, "max_citations", 5))
-        retrieved = self.retriever.retrieve(
-            query, top_k=int(self.cfg.retrieval.top_k), alpha=0.5
-        )
-        reranked = self.reranker.rerank(
-            query, retrieved, top_k=int(self.cfg.retrieval.rerank_top_k)
-        )
-        context = self._build_contexts(reranked[:max(max_cit, 5)])
+        # Dense only — vector store query, no BM25, no reranker
+        dense = self.vector_store.query(query, top_k=top_k)
+        context = self._build_contexts(dense[:max(max_cit, 5)])
         answer = self.generator.generate(query=query, context=context)
-        # B2 has reranker scores — filter for precision, keep all for grounding
-        citations = self._citations_from_context(context, use_score_filter=True)
+        citations = self._citations_from_context(context, use_score_filter=False)
         resp = self._to_response(query, answer, citations, t_start)
-        resp.grounding_citations = self._citations_from_context(context, use_score_filter=False)
+        resp.grounding_citations = citations
         return resp
 
 
 class BaselineB3(_BaselineBase):
-    """Fine-tuned retriever + fine-tuned reranker + SFT adapter."""
+    """B3 — Hybrid retrieval (Dense+BM25, fixed alpha=0.5) + ColBERT rerank + base Qwen."""
 
     model_tag = "b3"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         cfg = self.cfg
-        reranker_ckpt = getattr(cfg.checkpoints, "reranker", None)
-
         if self.bm25_index is None:
             self.bm25_index = _load_bm25(_bm25_path_from_cfg(cfg))
         if self.reranker is None:
-            try:
-                self.reranker = ColBERTReranker(checkpoint_path=reranker_ckpt)
-            except Exception:
-                self.reranker = ColBERTReranker()
-
-        # B3 uses base (untrained) generator — trained generators reserved for M1-M5.
-        cfg_gguf = getattr(cfg.models.generator, "gguf_path", "")
-        base_gguf = Path(cfg_gguf).parent / "aegis_base.gguf" if cfg_gguf else Path("checkpoints/aegis_base.gguf")
-        self.generator = Generator(gguf_path=str(base_gguf) if base_gguf.exists() else None)
+            self.reranker = ColBERTReranker()  # base reranker, no fine-tuning
 
         self.retriever = HybridRetriever(
             vector_store=self.vector_store,

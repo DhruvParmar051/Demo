@@ -29,7 +29,7 @@ models:
     do_sample: true
     gguf_path: "checkpoints/aegis_final.gguf"
     gguf_n_ctx: 4096
-    gguf_n_gpu_layers: 0 # 0 = CPU only (MPS Metal crashes with quantized attention shapes)
+    gguf_n_gpu_layers: -1 # -1 = all layers on GPU/Metal; set 0 to force CPU
 
   nli:
     name: "cross-encoder/nli-MiniLM2-L6-H768"
@@ -290,13 +290,12 @@ evaluation:
 # Checkpoint Paths
 # ---------------------------------------------------------------------------
 checkpoints:
+  retriever: "checkpoints/retriever"
   reranker: "checkpoints/reranker"
   confidence_head: "checkpoints/confidence_head"
   alpha_network: "checkpoints/alpha_network"
   generator_sft: "checkpoints/generator_sft"
   dpo: "checkpoints/dpo"
-  use_finetuned_reranker: true   # set false to fall back to base cross-encoder
-  use_finetuned_retriever: true  # set false to use base BGE-m3 + aegis_chunks
 
 # ---------------------------------------------------------------------------
 # Logging

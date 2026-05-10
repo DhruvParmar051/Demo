@@ -399,7 +399,8 @@ class Generator:
         n_ctx = int(getattr(self.cfg.models.generator, "gguf_n_ctx", 4096))
 
         # Resolve n_gpu_layers: env var > config > device-based default.
-        # MPS (Apple Silicon) crashes with -1 on many quantised GGUF models.
+        # Priority: AEGIS_GGUF_N_GPU_LAYERS env > gguf_n_gpu_layers in config.
+        # Set gguf_n_gpu_layers: -1 in base.yaml to offload all layers to Metal/CUDA.
         import os as _os
         _env_gpu = (
             _os.getenv("AEGIS_MODELS__GENERATOR__GGUF_N_GPU_LAYERS")
@@ -408,13 +409,11 @@ class Generator:
         if _env_gpu is not None:
             n_gpu_layers = int(_env_gpu)
         else:
-            _cfg_n_gpu = getattr(self.cfg.models.generator, "gguf_n_gpu_layers", -1)
-            if self.device_str == "mps":
-                n_gpu_layers = 0   # Metal matmul crashes on many quant shapes
-            elif self.device_str == "cuda":
-                n_gpu_layers = int(_cfg_n_gpu)
+            _cfg_n_gpu = int(getattr(self.cfg.models.generator, "gguf_n_gpu_layers", 0))
+            if self.device_str in ("mps", "cuda"):
+                n_gpu_layers = _cfg_n_gpu  # use config value (-1 = all layers on GPU/Metal)
             else:
-                n_gpu_layers = 0
+                n_gpu_layers = 0  # CPU
 
         self._llama = Llama(
             model_path=str(self.gguf_path),

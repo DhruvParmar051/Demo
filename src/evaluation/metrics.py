@@ -18,6 +18,80 @@ from src.data.schema import Citation, QueryResponse, ToolCall
 
 
 # ----------------------------------------------------------------------
+# ROUGE metrics
+# ----------------------------------------------------------------------
+
+def rouge_scores(pred: str, gold: str) -> dict[str, float]:
+    """Compute ROUGE-1, ROUGE-2 and ROUGE-L F1 between answer and gold reference.
+
+    Args:
+        pred: Predicted answer string.
+        gold: Gold reference answer string.
+
+    Returns:
+        Dict with keys ``rouge1``, ``rouge2``, ``rougeL`` (all F1).
+        Returns zeros if either input is empty.
+    """
+    if not pred or not gold:
+        return {"rouge1": 0.0, "rouge2": 0.0, "rougeL": 0.0}
+    try:
+        from rouge_score import rouge_scorer  # type: ignore
+        scorer = rouge_scorer.RougeScorer(
+            ["rouge1", "rouge2", "rougeL"], use_stemmer=True
+        )
+        scores = scorer.score(gold, pred)
+        return {
+            "rouge1": round(scores["rouge1"].fmeasure, 4),
+            "rouge2": round(scores["rouge2"].fmeasure, 4),
+            "rougeL": round(scores["rougeL"].fmeasure, 4),
+        }
+    except ImportError:
+        return {"rouge1": 0.0, "rouge2": 0.0, "rougeL": 0.0}
+
+
+def context_rouge(answer: str, citations: list[Citation]) -> dict[str, float]:
+    """Compute ROUGE between the answer and concatenated retrieved chunk text.
+
+    Measures how much of the answer is directly drawn from the retrieved
+    context — a lexical grounding check complementing the token-overlap
+    grounding_score.
+
+    Args:
+        answer: Generated answer string.
+        citations: Retrieved Citation objects whose ``cited_text`` forms
+            the reference corpus.
+
+    Returns:
+        Dict with keys ``ctx_rouge1``, ``ctx_rouge2``, ``ctx_rougeL`` (F1).
+        Returns zeros if answer or citations are empty.
+    """
+    if not answer or not citations:
+        return {"ctx_rouge1": 0.0, "ctx_rouge2": 0.0, "ctx_rougeL": 0.0}
+
+    # Concatenate all chunk texts as the reference
+    context_text = " ".join(c.cited_text or "" for c in citations if c.cited_text)
+    if not context_text.strip():
+        return {"ctx_rouge1": 0.0, "ctx_rouge2": 0.0, "ctx_rougeL": 0.0}
+
+    try:
+        from rouge_score import rouge_scorer  # type: ignore
+        scorer = rouge_scorer.RougeScorer(
+            ["rouge1", "rouge2", "rougeL"], use_stemmer=True
+        )
+        # We want: "what fraction of answer n-grams appear in context?"
+        # Use answer as reference, context as hypothesis → read .recall
+        # (= fraction of answer n-grams covered by the context).
+        scores = scorer.score(answer, context_text)
+        return {
+            "ctx_rouge1": round(scores["rouge1"].recall, 4),
+            "ctx_rouge2": round(scores["rouge2"].recall, 4),
+            "ctx_rougeL": round(scores["rougeL"].recall, 4),
+        }
+    except ImportError:
+        return {"ctx_rouge1": 0.0, "ctx_rouge2": 0.0, "ctx_rougeL": 0.0}
+
+
+# ----------------------------------------------------------------------
 # Token normalization helpers
 # ----------------------------------------------------------------------
 

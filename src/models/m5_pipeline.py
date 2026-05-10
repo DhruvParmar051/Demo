@@ -48,23 +48,23 @@ class PipelineFlags:
     def for_tag(cls, tag: str) -> "PipelineFlags":
         tag = tag.lower().strip()
         mapping = {
-            # M1 – baseline, no fine-tuning
+            # M1 – Hybrid retrieval + SFT Qwen (no CGAL)
             "m1": cls(cgal=False, verify=False,
                       adaptive_alpha=False, decomposition=False,
-                      gguf_variant="base"),
-            # M2 – CGAL loop + SFT generator
-            "m2": cls(cgal=True, verify=False,
-                      adaptive_alpha=False, decomposition=False,
                       gguf_variant="sft"),
-            # M3 – CGAL loop + DPO-aligned generator
+            # M2 – M1 + DPO alignment (still no CGAL)
+            "m2": cls(cgal=False, verify=False,
+                      adaptive_alpha=False, decomposition=False,
+                      gguf_variant="dpo"),
+            # M3 – M2 + confidence head (CGAL loop enabled to use it)
             "m3": cls(cgal=True, verify=False,
                       adaptive_alpha=False, decomposition=False,
                       gguf_variant="dpo"),
-            # M4 – M3 + answer verifier
+            # M4 – M3 + full CGAL loop with answer verifier
             "m4": cls(cgal=True, verify=True,
                       adaptive_alpha=False, decomposition=False,
                       gguf_variant="dpo"),
-            # M5 – full system
+            # M5 – full system: M4 + adaptive alpha + query decomposition
             "m5": cls(cgal=True, verify=True,
                       adaptive_alpha=True, decomposition=True,
                       gguf_variant="dpo"),
@@ -127,15 +127,15 @@ class M5Pipeline:
         self.flags = flags
         self.model_tag = model_tag
 
-        # Always query ChromaDB with the base embedding model — the fine-tuned
-        # retriever checkpoint has a shifted embedding space relative to the
-        # indexed vectors, causing ~50% of queries to return zero candidates.
-        # Re-indexing with the fine-tuned weights would be needed to use it here.
         if vector_store is not None:
             self.vector_store = vector_store
         else:
             _collection = getattr(getattr(cfg, "data", None), "vector_db_collection", "aegis_chunks")
-            logger.info("Using ChromaDB collection: %s", _collection)
+            # NOTE: Fine-tuned retriever cannot be used directly — the Chroma index
+            # was built with base BGE-m3 embeddings. Querying with fine-tuned weights
+            # produces mismatched vector spaces and ~50% zero-candidate queries.
+            # To use fine-tuned retriever: re-run ingestion with fine-tuned model.
+            logger.info("Using base BGE-m3 for retrieval (index built with base embeddings)")
             self.vector_store = ChromaVectorStore(collection_name=_collection)
 
         if bm25_index is None:
@@ -156,30 +156,12 @@ class M5Pipeline:
         if reranker is not None:
             self.reranker = reranker
         else:
-            reranker_ckpt = getattr(cfg.checkpoints, "reranker", None)
-            # Only load the fine-tuned checkpoint when it has been validated to
-            # improve recall over the base model.  The current checkpoint at
-            # checkpoints/reranker was found to actively hurt recall (gold chunk
-            # rank 0 on base → absent from top-10 after fine-tuning), so we skip
-            # it until the reranker is retrained with better negative mining.
-            # To re-enable: set use_finetuned_reranker: true in config or pass
-            # a reranker instance directly.
-            _use_ft = getattr(getattr(cfg, "checkpoints", None), "use_finetuned_reranker", False)
-            if _use_ft and reranker_ckpt and Path(reranker_ckpt).exists():
-                try:
-                    self.reranker = ColBERTReranker(checkpoint_path=reranker_ckpt)
-                    logger.info("Loaded fine-tuned reranker from %s", reranker_ckpt)
-                except Exception as exc:
-                    logger.warning("Fine-tuned reranker load failed (%s); using base.", exc)
-                    self.reranker = ColBERTReranker()
-            else:
-                self.reranker = ColBERTReranker()
-                if reranker_ckpt and Path(reranker_ckpt).exists():
-                    logger.info(
-                        "Fine-tuned reranker checkpoint found at %s but skipped "
-                        "(use_finetuned_reranker=false). Using base model.",
-                        reranker_ckpt,
-                    )
+            # NOTE: Fine-tuned reranker produces lower scores and different top-1
+            # chunks than the base model on held-out queries — likely due to
+            # insufficient hard negative diversity during training.
+            # Using base cross-encoder until reranker is retrained.
+            self.reranker = ColBERTReranker()
+            logger.info("Using base ColBERT reranker.")
 
         # Select the pre-merged GGUF for this variant so that adapter weights are
         # actually applied at inference time.  GGUF (llama-cpp) cannot load HF
