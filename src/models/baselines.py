@@ -111,14 +111,24 @@ class _BaselineBase:
         return self.run(query)
 
     @staticmethod
-    def _citations_from_context(context: list[RetrievalResult]) -> list[Citation]:
-        """Build Citation objects directly from retrieved chunks.
+    def _citations_from_context(
+        context: list[RetrievalResult],
+        use_score_filter: bool = False,
+    ) -> list[Citation]:
+        """Build Citation objects from retrieved chunks.
 
-        generate_with_citations relies on parsing inline [doc_id:start-end]
-        markers from the answer text, but Generator.generate() strips those
-        markers before returning.  Building citations from the retrieved chunks
-        directly avoids empty citation lists on all baselines.
+        When ``use_score_filter=True`` (B2/B3 which have reranker scores):
+        only cite chunks within 40% of the top score — improves precision.
+        When False (B1, dense scores only): cite all chunks.
         """
+        if use_score_filter and context:
+            scores = [rr.rerank_score or rr.score for rr in context]
+            top = max(scores) if scores else 0.0
+            threshold = top * 0.60
+            filtered = [rr for rr, s in zip(context, scores) if s >= threshold]
+            # Guarantee at least top-2
+            context = filtered if len(filtered) >= 2 else context[:2]
+
         citations = []
         for rr in context:
             chunk = rr.chunk
@@ -148,14 +158,16 @@ class BaselineB1(_BaselineBase):
 
     def run(self, query: str) -> QueryResponse:
         t_start = time.perf_counter()
-        # Retrieve top_k candidates, pass top 5 to generator for better grounding
         top_k = int(self.cfg.retrieval.top_k)
         max_cit = int(getattr(self.cfg.retrieval, "max_citations", 5))
         dense = self.vector_store.query(query, top_k=top_k)
         context = self._build_contexts(dense[:max(max_cit, 5)])
         answer = self.generator.generate(query=query, context=context)
-        citations = self._citations_from_context(context)
-        return self._to_response(query, answer, citations, t_start)
+        # B1 has no reranker scores — cite all for both precision and grounding
+        citations = self._citations_from_context(context, use_score_filter=False)
+        resp = self._to_response(query, answer, citations, t_start)
+        resp.grounding_citations = citations
+        return resp
 
 
 class BaselineB2(_BaselineBase):
@@ -186,8 +198,11 @@ class BaselineB2(_BaselineBase):
         )
         context = self._build_contexts(reranked[:max(max_cit, 5)])
         answer = self.generator.generate(query=query, context=context)
-        citations = self._citations_from_context(context)
-        return self._to_response(query, answer, citations, t_start)
+        # B2 has reranker scores — filter for precision, keep all for grounding
+        citations = self._citations_from_context(context, use_score_filter=True)
+        resp = self._to_response(query, answer, citations, t_start)
+        resp.grounding_citations = self._citations_from_context(context, use_score_filter=False)
+        return resp
 
 
 class BaselineB3(_BaselineBase):
@@ -230,5 +245,8 @@ class BaselineB3(_BaselineBase):
         )
         context = self._build_contexts(reranked[:max(max_cit, 5)])
         answer = self.generator.generate(query=query, context=context)
-        citations = self._citations_from_context(context)
-        return self._to_response(query, answer, citations, t_start)
+        # B3 has reranker scores — filter for precision, keep all for grounding
+        citations = self._citations_from_context(context, use_score_filter=True)
+        resp = self._to_response(query, answer, citations, t_start)
+        resp.grounding_citations = self._citations_from_context(context, use_score_filter=False)
+        return resp

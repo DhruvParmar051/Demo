@@ -29,18 +29,23 @@ logger = logging.getLogger(__name__)
 
 # Stop sequences that prevent repetitive / out-of-role generation.
 _STOP = [
-    # Chat turn delimiters
+    # Chat turn delimiters — all common formats
     "<|user|>", "<|system|>", "<|context|>", "<|assistant|>",
     "<|end|>", "<|/assistant|>", "<|endoftext|>",
-    # Common hallucinated follow-up patterns
+    ">|Human|", ">|Assistant|", ">|User|",
+    "|Human|", "|Assistant|", "|User|",
+    # Newline-prefixed variants
     "\nHuman:", "\n\nHuman:", "Human: Can", "Human: What",
     "\nUser:", "\n\nUser:",
     "\nAssistant:", "\n\nAssistant:",
-    # Filler phrases that indicate model is rambling
+    # Any multi-turn continuation pattern
+    "\n>|", " >|",
+    # Filler / rambling phrases
     "\n\nIf you need further", "\n\nPlease provide more",
     "\n\nIf you have any other", "\n\nIs there anything else",
     "\n\nWould you like", "\n\nCan you provide more",
     "\n\nSummarize", "\n\nCertainly!", "\n\nOf course!",
+    "\n\nNote:", "\n\nPlease note:",
 ]
 
 SYSTEM_PROMPT = (
