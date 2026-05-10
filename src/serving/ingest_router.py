@@ -123,7 +123,7 @@ def build_ingest_router(config: Any | None = None):
                     logger.warning("Could not load BM25 index: %s — starting fresh.", _exc)
 
             ingestor = DocumentIngestor(
-                collection_name=collection_id or "aegis_chunks",
+                collection_name=collection_id or _cfg.data.vector_db_collection,
                 bm25_index=_bm25,
             )
             stats = ingestor.ingest(Path(tmp_dir))

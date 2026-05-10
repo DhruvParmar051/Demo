@@ -255,6 +255,7 @@ device:
 # ---------------------------------------------------------------------------
 data:
   vector_db_path: "data/vectordb"
+  vector_db_collection: "aegis_chunks_ft"   # fine-tuned retriever collection
   bm25_index_path: "data/bm25_index.pkl"
   audit_db_path: "data/audit.db"
   raw_docs_dir: "data/raw_docs"
@@ -295,6 +296,7 @@ checkpoints:
   generator_sft: "checkpoints/generator_sft"
   dpo: "checkpoints/dpo"
   use_finetuned_reranker: true   # set false to fall back to base cross-encoder
+  use_finetuned_retriever: true  # set false to use base BGE-m3 + aegis_chunks
 
 # ---------------------------------------------------------------------------
 # Logging

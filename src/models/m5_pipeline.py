@@ -134,7 +134,9 @@ class M5Pipeline:
         if vector_store is not None:
             self.vector_store = vector_store
         else:
-            self.vector_store = ChromaVectorStore()
+            _collection = getattr(getattr(cfg, "data", None), "vector_db_collection", "aegis_chunks")
+            logger.info("Using ChromaDB collection: %s", _collection)
+            self.vector_store = ChromaVectorStore(collection_name=_collection)
 
         if bm25_index is None:
             bm25_index = BM25Index()

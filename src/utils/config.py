@@ -327,6 +327,7 @@ class SyntheticPathsConfig(BaseModel):
 
 class DataConfig(BaseModel):
     vector_db_path: str = "data/vectordb"
+    vector_db_collection: str = "aegis_chunks"  # overridden to aegis_chunks_ft when fine-tuned retriever is used
     bm25_index_path: str = "data/bm25_index.pkl"
     audit_db_path: str = "data/audit.db"
     raw_docs_dir: str = "data/raw_docs"
