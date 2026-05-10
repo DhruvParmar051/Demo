@@ -6,6 +6,9 @@ Three single-pass baselines without CGAL/DPO/verify/decomposition:
 - **B1**  Dense-only (BGE-m3 + Chroma), top-5, zero-shot Qwen2.5.
 - **B2**  Dense + BM25 hybrid (fixed alpha=0.5) + ColBERT rerank + zero-shot.
 - **B3**  Fine-tuned retriever + fine-tuned reranker + SFT adapter.
+
+python scripts/evaluate_all.py --models m2 --output-dir report
+
 """
 
 from __future__ import annotations
