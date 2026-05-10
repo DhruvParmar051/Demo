@@ -494,8 +494,13 @@ def cgal_efficiency(responses: list[QueryResponse]) -> float:
         empty list.
     """
     if not responses:
-        return 0.0
-    return float(np.mean([r.cgal_iterations for r in responses]))
+        return float("nan")
+    iters = [r.cgal_iterations for r in responses]
+    # Baselines store cgal_iterations=0 (no loop at all) — return NaN so
+    # the metric is not misread as "0 iterations" in the results table.
+    if all(i == 0 for i in iters):
+        return float("nan")
+    return float(np.mean(iters))
 
 
 # ----------------------------------------------------------------------
