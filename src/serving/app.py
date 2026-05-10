@@ -122,16 +122,24 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
     api_prefix = getattr(cfg.serving, "api_prefix", "").rstrip("/")  # e.g. "/api/v1"
     app = FastAPI(title="AegisRAG", version="1.0.0")
 
+    # Fix 1: Read CORS origins from config instead of hardcoded localhost list.
+    # base.yaml has cors_origins: ["*"] — this allows production frontends.
+    cors_origins = list(getattr(cfg.serving, "cors_origins", ["http://localhost:8501"]))
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:8501", "http://localhost:3000",
-                       "http://localhost"],
+        allow_origins=cors_origins,
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    audit_db = Path(getattr(cfg.paths, "audit_db", "data/audit.sqlite"))
+    # Fix 2: Resolve audit_db path relative to project root, not CWD.
+    _audit_db_rel = (
+        getattr(getattr(cfg, "data", None), "audit_db_path", None)
+        or getattr(getattr(cfg, "paths", None), "audit_db", None)
+        or "data/audit.sqlite"
+    )
+    audit_db = Path(cfg.resolve_path(_audit_db_rel))
     audit = AuditLogger(audit_db)
     registry = PipelineRegistry(cfg)
 
@@ -140,8 +148,16 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
     _resp_cache_max: int = 512
 
     def _cache_get(query: str, tag: str) -> dict | None:
+        import uuid as _uuid
         key = (query.strip().lower(), tag.lower())
-        return _resp_cache.get(key)
+        hit = _resp_cache.get(key)
+        if hit is None:
+            return None
+        # Regenerate session_id so different users don't share the same identifier
+        # in audit logs even when their queries hit the exact same cache entry.
+        result = dict(hit)
+        result["session_id"] = str(_uuid.uuid4())
+        return result
 
     def _cache_put(query: str, tag: str, resp: dict) -> None:
         key = (query.strip().lower(), tag.lower())
@@ -356,12 +372,20 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
             logger.info("user_docs scores: {}", [round(s, 3) for _, s in results])
         results = [(c, s) for c, s in results if s >= MIN_SIMILARITY]
 
-        def _create_ticket(query: str) -> dict:
-            from src.tools.executor import ToolExecutor
-            from pathlib import Path as _Path
-            _ticket_db = _Path(cfg.data.audit_db_path).parent / "tickets.db"
-            _executor = ToolExecutor(retriever=None, ticket_store_path=_ticket_db)
-            return _executor.create_ticket(
+        async def _create_ticket(query: str) -> dict:
+            # Re-use the shared ToolExecutor from the M5 pipeline so that
+            # escalation tickets are visible via GET /tickets and the audit log.
+            # Falls back to a standalone executor only when M5 is not loaded yet.
+            _pipeline = registry._cache.get("m5")
+            _executor = (
+                getattr(_pipeline, "tool_executor", None)
+                or getattr(getattr(_pipeline, "engine", None), "tool_executor", None)
+            )
+            if _executor is None:
+                from src.tools.executor import ToolExecutor
+                _executor = ToolExecutor(retriever=None)
+            return await asyncio.to_thread(
+                _executor.create_ticket,
                 query=query,
                 summary=f"Out-of-scope query: {query[:200]}",
                 category="other",
@@ -369,7 +393,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
             )
 
         if not results:
-            ticket_result = await asyncio.to_thread(_create_ticket, req.query)
+            ticket_result = await _create_ticket(req.query)
             escalation = QueryResponse(
                 answer=(
                     "This question is outside the scope of your uploaded documents. "
@@ -419,7 +443,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
         is_out_of_scope = any(p in answer_lower for p in _OUT_OF_SCOPE_PHRASES)
 
         if is_out_of_scope:
-            ticket_result = await asyncio.to_thread(_create_ticket, req.query)
+            ticket_result = await _create_ticket(req.query)
             escalation = QueryResponse(
                 answer=(
                     "This question is outside the scope of your uploaded documents. "
@@ -439,7 +463,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
                 chunk_id=c.chunk_id,
                 span_start=c.span_start,
                 span_end=c.span_end,
-                cited_text=c.text[:500],
+                cited_text=c.text[:2000],
                 source=c.source,
                 page_number=c.page_number,
             )

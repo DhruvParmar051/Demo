@@ -167,7 +167,13 @@ def train(cfg: Any = None) -> dict[str, Any]:
     # Tokeniser + dataset
     # ------------------------------------------------------------------
 
-    model_name = "Qwen/Qwen2.5-7B-Instruct"
+    model_name = _attr(_attr(cfg, "models"), "generator", {})
+    if isinstance(model_name, dict):
+        model_name = model_name.get("name", "Qwen/Qwen2.5-7B-Instruct")
+    elif hasattr(model_name, "name"):
+        model_name = model_name.name
+    else:
+        model_name = "Qwen/Qwen2.5-7B-Instruct"
 
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 
@@ -315,14 +321,20 @@ def train(cfg: Any = None) -> dict[str, Any]:
     # Train
     # ------------------------------------------------------------------
 
-    trainer = DPOTrainer(
-        model=base,
-        ref_model=None,
-        args=args,
-        train_dataset=ds,
-        processing_class=tokenizer,
-        peft_config=peft_cfg,
-    )
+    import inspect as _inspect
+    _dpo_sig = _inspect.signature(DPOTrainer.__init__)
+    _dpo_kwargs: dict = {
+        "model": base,
+        "ref_model": None,
+        "args": args,
+        "train_dataset": ds,
+        "peft_config": peft_cfg,
+    }
+    if "processing_class" in _dpo_sig.parameters:
+        _dpo_kwargs["processing_class"] = tokenizer
+    else:
+        _dpo_kwargs["tokenizer"] = tokenizer
+    trainer = DPOTrainer(**_dpo_kwargs)
 
     trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 

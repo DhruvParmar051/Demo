@@ -5,26 +5,23 @@
     {
       "query": "When must you redetermine the estimated useful life?",
       "model_tag": "m5",
-      "answer": "You must redetermine the estimated useful life only when the change is substantial and there is a clear reason for making the change [65b40bba49859022:0-0].",
-      "latency_ms": 16059.401666978374,
+      "answer": "You must redetermine the estimated useful life when you change the method of depreciation or when you change the estimated salvage value .",
+      "latency_ms": 73387.07733305637,
       "ttft_ms": null,
-      "cgal_iterations": 1,
-      "confidence": 0.27453094720840454,
-      "grounding": 0.8846153846153846,
+      "cgal_iterations": 2,
+      "confidence": 0.3077901601791382,
+      "grounding": 0.6363636363636364,
       "citation_f1": {
-        "precision": 0.2,
+        "precision": 0.5,
         "recall": 1.0,
-        "f1": 0.33333333333333337
+        "f1": 0.6666666666666666
       },
       "recall_at_20": 1.0,
-      "bertscore_f1": 0.9389819502830505,
-      "tool_accuracy": {
-        "name_match": 0.0,
-        "arg_f1": 0.0
-      },
+      "bertscore_f1": 0.9153831601142883,
+      "tool_accuracy": null,
       "fcrs": {
-        "fcrs": 0.9786436825990676,
-        "completeness": 0.9389819502830505,
+        "fcrs": 0.9506401767333349,
+        "completeness": 0.9153831601142883,
         "citation_coverage": 1.0,
         "tool_appropriateness": 1.0,
         "escalation_accuracy": 1.0
@@ -33,26 +30,23 @@
     {
       "query": "When do services furnished on or after January 1, 2024, require reporting under Division FF, section 4136 of the CAA, 2023?",
       "model_tag": "m5",
-      "answer": "Services furnished on or after January 1, 2024, require reporting under Division FF, section 4136 of the CAA, 2023 [69d0085029c5fb54:0-0].",
-      "latency_ms": 14770.9155830089,
+      "answer": "Services furnished on or after January 1, 2024, require reporting under Division FF, section 4136 of the CAA, 2023. This requirement is effective for services furnished on or after January 1, 2024, and applies to services furnished on or after that date .",
+      "latency_ms": 102240.95958296675,
       "ttft_ms": null,
-      "cgal_iterations": 1,
-      "confidence": 0.27308738231658936,
-      "grounding": 0.6363636363636364,
+      "cgal_iterations": 3,
+      "confidence": 0.29078060388565063,
+      "grounding": 0.42857142857142855,
       "citation_f1": {
         "precision": 0.0,
         "recall": 0.0,
         "f1": 0.0
       },
       "recall_at_20": 0.0,
-      "bertscore_f1": 0.9392404556274414,
-      "tool_accuracy": {
-        "name_match": 0.0,
-        "arg_f1": 0.0
-      },
+      "bertscore_f1": 0.9523872137069702,
+      "tool_accuracy": null,
       "fcrs": {
-        "fcrs": 0.7287341594696044,
-        "completeness": 0.9392404556274414,
+        "fcrs": 0.5555592079957327,
+        "completeness": 0.9523872137069702,
         "citation_coverage": 0.0,
         "tool_appropriateness": 1.0,
         "escalation_accuracy": 1.0
@@ -61,27 +55,24 @@
     {
       "query": "What must be true first, then second, and what happens next for a grant recipient to satisfy the service obligation by teaching history?",
       "model_tag": "m5",
-      "answer": "First, the recipient must receive a TEACH Grant, and second, history must be designated as a high-need field in the state where the recipient intends to teach [49b040580e3ee33d:0-0].",
-      "latency_ms": 14589.539833017625,
+      "answer": "For [(sub-query)]:\nThe recipient must complete at least one year of full-time teaching in a high-need field, such as history, in a Title I-eligible school or a school that has an agreement with another institution that offers a teacher preparation program or a post-baccalaureate program that prepares students to teach. This requirement ensures that the recipient has the necessary experience and knowledge to teach effectively in a high-need field .\n\nFor [(sub-query)]:\nThe services of a CSW are not covered when furnished to inpatients of a hospital or to inpatients of a SNF if the services furnished in the SNF are those that the SNF is required to furnish as a condition of participation in Medicare.\n\nFor [(sub-query)]:\nThe recipient must teach history for at least 4 years in a high-need field at a TEACH-eligible school, with at least 2 years of full-time teaching. If the recipient fails to meet these requirements, they must repay the grant in full, with interest, and may be ineligible for future TEACH Grants .",
+      "latency_ms": 184944.8532500537,
       "ttft_ms": null,
-      "cgal_iterations": 1,
-      "confidence": 0.24300885200500488,
-      "grounding": 0.8387096774193549,
+      "cgal_iterations": 3,
+      "confidence": 0.24827180802822113,
+      "grounding": 0.7318435754189944,
       "citation_f1": {
-        "precision": 0.2,
-        "recall": 1.0,
-        "f1": 0.33333333333333337
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
       },
-      "recall_at_20": 1.0,
-      "bertscore_f1": 0.8913831114768982,
-      "tool_accuracy": {
-        "name_match": 0.0,
-        "arg_f1": 0.0
-      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8522758483886719,
+      "tool_accuracy": null,
       "fcrs": {
-        "fcrs": 0.9619840890169142,
-        "completeness": 0.8913831114768982,
-        "citation_coverage": 1.0,
+        "fcrs": 0.4971609115600586,
+        "completeness": 0.8522758483886719,
+        "citation_coverage": 0.0,
         "tool_appropriateness": 1.0,
         "escalation_accuracy": 1.0
       }
@@ -89,27 +80,24 @@
     {
       "query": "Why do some locations offer free electronic filing while others do not?",
       "model_tag": "m5",
-      "answer": "Some businesses offer free e-file to their employees, members, or customers. Others offer it for a fee. Ask your employer or financial institution if they offer IRS e-file as an employee, member, or customer benefit [286f6a21af2586f3:0-0].",
-      "latency_ms": 30493.65800002124,
+      "answer": "Some locations offer free electronic filing while others do not due to specific rules, conditions, or exceptions. For example, the IRS offers free electronic filing for certain taxpayers, but not for all. Additionally, some states or localities may offer free electronic filing services to eligible taxpayers, while others do not. The availability of free electronic filing can depend on factors such as the type of tax return being filed, the taxpayer\u2019s income level, and the specific rules and regulations of the jurisdiction .",
+      "latency_ms": 71388.4635840077,
       "ttft_ms": null,
-      "cgal_iterations": 1,
-      "confidence": 0.3138825297355652,
-      "grounding": 0.8,
+      "cgal_iterations": 2,
+      "confidence": 0.30243751406669617,
+      "grounding": 0.3253012048192771,
       "citation_f1": {
-        "precision": 0.2,
-        "recall": 1.0,
-        "f1": 0.33333333333333337
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
       },
-      "recall_at_20": 1.0,
-      "bertscore_f1": 0.8319441080093384,
-      "tool_accuracy": {
-        "name_match": 0.0,
-        "arg_f1": 0.0
-      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8775166869163513,
+      "tool_accuracy": null,
       "fcrs": {
-        "fcrs": 0.9411804378032684,
-        "completeness": 0.8319441080093384,
-        "citation_coverage": 1.0,
+        "fcrs": 0.5118847340345383,
+        "completeness": 0.8775166869163513,
+        "citation_coverage": 0.0,
         "tool_appropriateness": 1.0,
         "escalation_accuracy": 1.0
       }
@@ -117,26 +105,23 @@
     {
       "query": "What is the time frame for viewing 5 years of payment history?",
       "model_tag": "m5",
-      "answer": "You can view 5 years of payment history [286f6a21af2586f3:0-0].",
-      "latency_ms": 12830.928500043228,
+      "answer": "The time frame for viewing 5 years of payment history is not explicitly stated, but it can be inferred that the system allows access to the financial aid history for up to 5 years, as evidenced by the ability to view a student\u2019s financial aid history through the Transfer Student Monitoring Process, which includes information about Pell Grant disbursements and other federal student aid funds .",
+      "latency_ms": 91802.78279108461,
       "ttft_ms": null,
-      "cgal_iterations": 1,
-      "confidence": 0.2680198848247528,
-      "grounding": 0.5454545454545454,
+      "cgal_iterations": 3,
+      "confidence": 0.2713509798049927,
+      "grounding": 0.5,
       "citation_f1": {
         "precision": 0.0,
         "recall": 0.0,
         "f1": 0.0
       },
       "recall_at_20": 0.0,
-      "bertscore_f1": 0.8388624787330627,
-      "tool_accuracy": {
-        "name_match": 0.0,
-        "arg_f1": 0.0
-      },
+      "bertscore_f1": 0.8663672804832458,
+      "tool_accuracy": null,
       "fcrs": {
-        "fcrs": 0.6936018675565719,
-        "completeness": 0.8388624787330627,
+        "fcrs": 0.5053809136152267,
+        "completeness": 0.8663672804832458,
         "citation_coverage": 0.0,
         "tool_appropriateness": 1.0,
         "escalation_accuracy": 1.0
@@ -145,26 +130,23 @@
     {
       "query": "If an individual is not a bona fide resident of Puerto Rico for the tax year, what must they do?",
       "model_tag": "m5",
-      "answer": "They must file tax returns with both Puerto Rico and the United States [62af77477dbd3006:0-0].",
-      "latency_ms": 13882.975167012773,
+      "answer": "If an individual is not a bona fide resident of Puerto Rico for the tax year, they must file a U.S. income tax return with the Internal Revenue Service (IRS) .",
+      "latency_ms": 44998.64991696086,
       "ttft_ms": null,
       "cgal_iterations": 1,
-      "confidence": 0.30085742473602295,
-      "grounding": 0.75,
+      "confidence": 0.27602821588516235,
+      "grounding": 0.6774193548387096,
       "citation_f1": {
-        "precision": 0.2,
+        "precision": 0.5,
         "recall": 1.0,
-        "f1": 0.33333333333333337
+        "f1": 0.6666666666666666
       },
       "recall_at_20": 1.0,
-      "bertscore_f1": 0.9070910811424255,
-      "tool_accuracy": {
-        "name_match": 0.0,
-        "arg_f1": 0.0
-      },
+      "bertscore_f1": 0.9032291173934937,
+      "tool_accuracy": null,
       "fcrs": {
-        "fcrs": 0.9674818783998489,
-        "completeness": 0.9070910811424255,
+        "fcrs": 0.943550318479538,
+        "completeness": 0.9032291173934937,
         "citation_coverage": 1.0,
         "tool_appropriateness": 1.0,
         "escalation_accuracy": 1.0
@@ -173,27 +155,24 @@
     {
       "query": "How is the total medical expense calculated for driving 2,800 miles in 2025?",
       "model_tag": "m5",
-      "answer": "The total medical expense is calculated by adding the $400 for gas, the $30 for oil, and the $100 for tolls and parking, resulting in $530 [43161ee941dc0186:0-0].",
-      "latency_ms": 15949.966666987166,
+      "answer": "The total medical expense for driving 2,800 miles in 2025 is calculated based on the standard mileage rate for medical expenses, which is 14 cents per mile for 2025. Therefore, the total medical expense is $392 (2,800 miles * $0.14/mile). This amount is deductible if it exceeds 7.5% of the taxpayer's adjusted gross income (AGI) .",
+      "latency_ms": 74882.6589579694,
       "ttft_ms": null,
-      "cgal_iterations": 1,
-      "confidence": 0.3347104489803314,
-      "grounding": 0.8620689655172413,
+      "cgal_iterations": 2,
+      "confidence": 0.365815132856369,
+      "grounding": 0.2833333333333333,
       "citation_f1": {
-        "precision": 0.2,
-        "recall": 1.0,
-        "f1": 0.33333333333333337
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
       },
-      "recall_at_20": 1.0,
-      "bertscore_f1": 0.9510039687156677,
-      "tool_accuracy": {
-        "name_match": 0.0,
-        "arg_f1": 0.0
-      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8472465872764587,
+      "tool_accuracy": null,
       "fcrs": {
-        "fcrs": 0.9828513890504835,
-        "completeness": 0.9510039687156677,
-        "citation_coverage": 1.0,
+        "fcrs": 0.4942271759112676,
+        "completeness": 0.8472465872764587,
+        "citation_coverage": 0.0,
         "tool_appropriateness": 1.0,
         "escalation_accuracy": 1.0
       }
@@ -201,27 +180,24 @@
     {
       "query": "What is the maximum value of holiday or birthday gifts that employees can exclude from gross income without reporting?",
       "model_tag": "m5",
-      "answer": "Employees can exclude up to $7,500 ($3,750 if married filing separately) of holiday or birthday gifts with a low fair market value (FMV) from gross income [2691a5ae27cd64e6:0-0].",
-      "latency_ms": 31286.003749934025,
+      "answer": "The maximum value of holiday or birthday gifts that employees can exclude from gross income without reporting is $400. This exclusion applies to employee achievement awards, but the value must not exceed the amount you can deduct as a business expense for the year. If the value of the award is more than $400, it must be included in the employee\u2019s gross income and reported on Form W-2 .",
+      "latency_ms": 98941.53470802121,
       "ttft_ms": null,
-      "cgal_iterations": 1,
-      "confidence": 0.28803446888923645,
-      "grounding": 0.3870967741935484,
+      "cgal_iterations": 3,
+      "confidence": 0.2597959339618683,
+      "grounding": 0.5142857142857142,
       "citation_f1": {
-        "precision": 0.2,
-        "recall": 1.0,
-        "f1": 0.33333333333333337
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
       },
-      "recall_at_20": 1.0,
-      "bertscore_f1": 0.8680552244186401,
-      "tool_accuracy": {
-        "name_match": 0.0,
-        "arg_f1": 0.0
-      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8420076370239258,
+      "tool_accuracy": null,
       "fcrs": {
-        "fcrs": 0.953819328546524,
-        "completeness": 0.8680552244186401,
-        "citation_coverage": 1.0,
+        "fcrs": 0.49117112159729,
+        "completeness": 0.8420076370239258,
+        "citation_coverage": 0.0,
         "tool_appropriateness": 1.0,
         "escalation_accuracy": 1.0
       }
@@ -229,27 +205,24 @@
     {
       "query": "Who qualifies for the solar or wind energy credit under section 48(a)(3)(A)?",
       "model_tag": "m5",
-      "answer": "Qualified solar or wind energy property is eligible for the credit [af6c8bb6ff0481b2:0-0].",
-      "latency_ms": 13683.58008400537,
+      "answer": "The solar or wind energy credit under section 48(a)(3)(A) is available for qualified property placed in service after December 31, 2024, and before January 1, 2027. The credit is calculated based on the total cost of the qualified property, with a maximum credit of 26% of the total cost. The credit is phased out for property placed in service after December 31, 2026, and before January 1, 2027, with a 22% credit for property placed in service after December 31, 2026, and before January 1, 2027 .",
+      "latency_ms": 103593.83408294525,
       "ttft_ms": null,
-      "cgal_iterations": 1,
-      "confidence": 0.2834612727165222,
-      "grounding": 0.7857142857142857,
+      "cgal_iterations": 3,
+      "confidence": 0.30971166491508484,
+      "grounding": 0.43820224719101125,
       "citation_f1": {
-        "precision": 0.2,
-        "recall": 1.0,
-        "f1": 0.33333333333333337
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
       },
-      "recall_at_20": 1.0,
-      "bertscore_f1": 0.7954335808753967,
-      "tool_accuracy": {
-        "name_match": 0.0,
-        "arg_f1": 0.0
-      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8482827544212341,
+      "tool_accuracy": null,
       "fcrs": {
-        "fcrs": 0.9284017533063889,
-        "completeness": 0.7954335808753967,
-        "citation_coverage": 1.0,
+        "fcrs": 0.4948316067457199,
+        "completeness": 0.8482827544212341,
+        "citation_coverage": 0.0,
         "tool_appropriateness": 1.0,
         "escalation_accuracy": 1.0
       }
@@ -257,50 +230,54 @@
     {
       "query": "What is the period during which deductions would not be made for days spent in a psychiatric hospital?",
       "model_tag": "m5",
-      "answer": "Deductions would not be made for days spent in a psychiatric hospital during the preceding 150 days, even though the hospital is later certified for participation [65c69dd6643df39a:0-0].",
-      "latency_ms": 15171.59866692964,
+      "answer": "Deductions are not made for days spent in a psychiatric hospital if the hospital is primarily engaged in providing, by or under the supervision of a psychiatrist, psychiatric services for the diagnosis and treatment of mentally ill persons, and the patient is admitted only for active treatment, of an intensity that can be provided appropriately only in an inpatient hospital setting, of a psychiatric principal diagnosis that is listed in the International Classification of Diseases, Tenth Revision, Clinical Modification (ICD-10-CM).",
+      "latency_ms": 72377.24258296657,
       "ttft_ms": null,
-      "cgal_iterations": 1,
-      "confidence": 0.3130876421928406,
-      "grounding": 0.896551724137931,
+      "cgal_iterations": 2,
+      "confidence": 0.3198487460613251,
+      "grounding": 0.4878048780487805,
       "citation_f1": {
-        "precision": 0.2,
-        "recall": 1.0,
-        "f1": 0.33333333333333337
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
       },
-      "recall_at_20": 1.0,
-      "bertscore_f1": 0.8971932530403137,
-      "tool_accuracy": {
-        "name_match": 0.0,
-        "arg_f1": 0.0
-      },
+      "recall_at_20": 0.0,
+      "bertscore_f1": 0.8449829816818237,
+      "tool_accuracy": null,
       "fcrs": {
-        "fcrs": 0.9640176385641097,
-        "completeness": 0.8971932530403137,
-        "citation_coverage": 1.0,
+        "fcrs": 0.4929067393143971,
+        "completeness": 0.8449829816818237,
+        "citation_coverage": 0.0,
         "tool_appropriateness": 1.0,
         "escalation_accuracy": 1.0
       }
     }
   ],
   "aggregate": {
-    "grounding": 0.7386574993415926,
-    "citation_f1": 0.2666666666666667,
-    "citation_precision": 0.16,
-    "citation_recall": 0.8,
-    "bertscore_f1": 0.8859189212322235,
-    "recall_at_20": 0.8,
-    "tool_name_match": 0.0,
-    "tool_arg_f1": 0.0,
-    "fcrs": 0.9100716224312781,
-    "completeness": 0.8859189212322235,
-    "citation_coverage": 0.8,
+    "grounding": 0.5023125372870885,
+    "citation_f1": 0.13333333333333333,
+    "citation_precision": 0.1,
+    "citation_recall": 0.2,
+    "bertscore_f1": 0.8749679267406464,
+    "recall_at_20": 0.2,
+    "fcrs": 0.5937312905987103,
+    "completeness": 0.8749679267406464,
+    "citation_coverage": 0.2,
     "tool_appropriateness": 1.0,
     "escalation_accuracy_per_query": 1.0,
-    "latency_p50": 14971.25712496927,
-    "latency_p95": 30929.448162473273,
-    "latency_mean": 17871.856791793834,
-    "cgal_efficiency": 1.0,
-    "escalation_f1": 0.0
+    "latency_p50": 83342.720874527,
+    "latency_p95": 148336.89462485482,
+    "latency_mean": 91855.80567900324,
+    "cgal_efficiency": 2.4
+  },
+  "gguf_path": "checkpoints/aegis_dpo.gguf",
+  "flags": {
+    "cgal": true,
+    "dpo": true,
+    "verify": true,
+    "adaptive_alpha": true,
+    "decomposition": true,
+    "rule_based_tools": false,
+    "gguf_variant": "dpo"
   }
 }

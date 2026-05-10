@@ -103,9 +103,28 @@ def build_ingest_router(config: Any | None = None):
             # Lazy import so the router can be constructed in environments
             # where heavy deps aren't installed yet (tests, CI).
             from src.data.ingestion import DocumentIngestor  # noqa: WPS433
+            from src.retrieval.bm25_index import BM25Index
+            from src.utils.config import get_config as _get_config
+
+            # Load existing BM25 index so new chunks are APPENDED, not replacing
+            # the full corpus. Without this, every upload would overwrite the index
+            # with only the new document's chunks.
+            _cfg = config or _get_config()
+            _bm25_path = Path(_cfg.resolve_path(_cfg.data.bm25_index_path))
+            _bm25 = BM25Index()
+            if _bm25_path.exists():
+                try:
+                    _bm25.load(str(_bm25_path))
+                    logger.info(
+                        "Loaded existing BM25 index (%d docs) for incremental update.",
+                        _bm25.size,
+                    )
+                except Exception as _exc:
+                    logger.warning("Could not load BM25 index: %s — starting fresh.", _exc)
 
             ingestor = DocumentIngestor(
-                collection_name=collection_id or "aegis_chunks"
+                collection_name=collection_id or "aegis_chunks",
+                bm25_index=_bm25,
             )
             stats = ingestor.ingest(Path(tmp_dir))
 
@@ -114,7 +133,12 @@ def build_ingest_router(config: Any | None = None):
             chunks_added = 0
             doc_ids: List[str] = []
             if isinstance(stats, dict):
-                chunks_added = int(stats.get("chunks_added") or stats.get("num_chunks") or 0)
+                chunks_added = int(
+                    stats.get("chunks_added")
+                    or stats.get("chunks_produced")
+                    or stats.get("num_chunks")
+                    or 0
+                )
                 doc_ids = list(stats.get("doc_ids") or [])
 
             elapsed_ms = int((time.time() - started) * 1000)

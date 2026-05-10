@@ -44,8 +44,9 @@ models:
 # Retrieval Settings
 # ---------------------------------------------------------------------------
 retrieval:
-  top_k: 20
-  rerank_top_k: 5
+  top_k: 50
+  rerank_top_k: 10
+  max_citations: 3
   chunk_size: 256
   chunk_overlap: 96
   min_chunk_size: 30
@@ -62,7 +63,7 @@ retrieval:
 # CGAL (Confidence-Gated Action Loop) Settings
 # ---------------------------------------------------------------------------
 cgal:
-  max_iterations: 3
+  max_iterations: 2
   high_confidence: 0.35 # answer directly; calibrated to observed conf-head range 0.20-0.36
   medium_confidence: 0.25 # NLI-verify before returning; triggers for mid-range outputs
   low_confidence: 0.15 # retry; below this escalate immediately
@@ -150,6 +151,10 @@ training:
     preference_types:
       - "hallucinated_citation"
       - "no_citation"
+      - "partial_truncation"
+      - "verbose_unfaithful"
+      - "wrong_tool"
+      - "unsafe_tone"
     output_dir: "checkpoints/dpo"
 
   confidence_head:

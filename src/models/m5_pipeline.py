@@ -38,11 +38,9 @@ class PipelineFlags:
     """Feature toggles that select a model variant."""
 
     cgal: bool = True
-    dpo: bool = True
     verify: bool = True
     adaptive_alpha: bool = True
     decomposition: bool = True
-    rule_based_tools: bool = False
     # Which pre-merged GGUF variant to load: "base" | "sft" | "dpo"
     gguf_variant: str = "dpo"
 
@@ -51,23 +49,23 @@ class PipelineFlags:
         tag = tag.lower().strip()
         mapping = {
             # M1 – baseline, no fine-tuning
-            "m1": cls(cgal=False, dpo=False, verify=False,
+            "m1": cls(cgal=False, verify=False,
                       adaptive_alpha=False, decomposition=False,
-                      rule_based_tools=True, gguf_variant="base"),
+                      gguf_variant="base"),
             # M2 – CGAL loop + SFT generator
-            "m2": cls(cgal=True, dpo=False, verify=False,
+            "m2": cls(cgal=True, verify=False,
                       adaptive_alpha=False, decomposition=False,
                       gguf_variant="sft"),
             # M3 – CGAL loop + DPO-aligned generator
-            "m3": cls(cgal=True, dpo=True, verify=False,
+            "m3": cls(cgal=True, verify=False,
                       adaptive_alpha=False, decomposition=False,
                       gguf_variant="dpo"),
             # M4 – M3 + answer verifier
-            "m4": cls(cgal=True, dpo=True, verify=True,
+            "m4": cls(cgal=True, verify=True,
                       adaptive_alpha=False, decomposition=False,
                       gguf_variant="dpo"),
             # M5 – full system
-            "m5": cls(cgal=True, dpo=True, verify=True,
+            "m5": cls(cgal=True, verify=True,
                       adaptive_alpha=True, decomposition=True,
                       gguf_variant="dpo"),
         }
@@ -140,10 +138,15 @@ class M5Pipeline:
 
         if bm25_index is None:
             bm25_index = BM25Index()
-            bm25_path = getattr(cfg.paths, "bm25_index", None)
+            # Primary: cfg.data.bm25_index_path (correct location in base.yaml)
+            bm25_path = getattr(getattr(cfg, "data", None), "bm25_index_path", None)
+            # Fallback: cfg.paths.bm25_index (legacy)
+            if not bm25_path:
+                bm25_path = getattr(getattr(cfg, "paths", None), "bm25_index", None)
             if bm25_path:
                 try:
                     bm25_index.load(bm25_path)
+                    logger.info("BM25 index loaded (%d docs)", bm25_index.size)
                 except Exception as exc:
                     logger.warning("BM25 load failed (%s); using empty index.", exc)
         self.bm25_index = bm25_index
@@ -256,7 +259,8 @@ class M5Pipeline:
         )
 
         # Tool executor.
-        ticket_db = Path(cfg.paths.audit_db) if hasattr(cfg, "paths") else None
+        ticket_db_str = getattr(getattr(cfg, "paths", None), "audit_db", None)
+        ticket_db = Path(ticket_db_str) if ticket_db_str else None
         self.tool_executor = tool_executor or ToolExecutor(
             retriever=self.retriever,
             reranker=self.reranker,

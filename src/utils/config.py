@@ -71,6 +71,7 @@ class ModelsConfig(BaseModel):
 class RetrievalConfig(BaseModel):
     top_k: int = 20
     rerank_top_k: int = 5
+    max_citations: int = 2
     chunk_size: int = 256
     chunk_overlap: int = 64
     min_chunk_size: int = 30
@@ -168,12 +169,12 @@ class DPOTrainingConfig(BaseModel):
     max_prompt_length: int = 1024
     loss_type: str = "sigmoid"
     preference_types: List[str] = Field(default_factory=lambda: [
-        "factual_grounding",
-        "citation_accuracy",
-        "refusal_calibration",
-        "tone_formality",
-        "completeness",
-        "safety_compliance",
+        "hallucinated_citation",
+        "no_citation",
+        "partial_truncation",
+        "verbose_unfaithful",
+        "wrong_tool",
+        "unsafe_tone",
     ])
     output_dir: str = "checkpoints/dpo"
 

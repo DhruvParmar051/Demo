@@ -373,7 +373,7 @@ class Generator:
                 f"GGUF model not found at {self.gguf_path}. "
                 "Run scripts/convert_to_gguf.py first."
             )
-        n_ctx = int(getattr(self.cfg.models.generator, "max_seq_length", 4096))
+        n_ctx = int(getattr(self.cfg.models.generator, "gguf_n_ctx", 4096))
 
         # Resolve n_gpu_layers: env var > config > device-based default.
         # MPS (Apple Silicon) crashes with -1 on many quantised GGUF models.

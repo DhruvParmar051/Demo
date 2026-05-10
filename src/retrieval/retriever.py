@@ -45,7 +45,7 @@ class HybridRetriever:
         Sparse retrieval backend.
     alpha_network : torch.nn.Module or None
         Optional learned MLP that predicts the dense weight from query
-        features.  Expected to accept a tensor of shape ``(1, 4)`` and
+        features.  Expected to accept a tensor of shape ``(1, 12)`` and
         return a scalar in ``[0, 1]`` (after sigmoid).
     """
 
@@ -185,31 +185,19 @@ class HybridRetriever:
         if alpha_net is None:
             return self._default_alpha
 
-        features = self.extract_query_features(query)
-        # Feature order must match AlphaNetwork.get_features():
-        # log_query_length, keyword_density, domain_hash, query_emb_norm, has_exact_phrase
-        feat_tensor = torch.tensor(
-            [
-                [
-                    features["length"],
-                    features["keyword_density"],
-                    0.0,  # domain_hash — no domain at retrieval time, use neutral 0
-                    features["embedding_norm"],
-                    features["has_exact_phrase"],
-                ]
-            ],
-            dtype=torch.float32,
-        )
+        # Get query embedding for norm feature
+        try:
+            query_emb = self.vector_store.model.encode(
+                [query], normalize_embeddings=True
+            )[0]
+        except Exception:
+            import numpy as _np
+            query_emb = _np.zeros(1, dtype=_np.float32)
 
-        device = next(alpha_net.parameters()).device
-        feat_tensor = feat_tensor.to(device)
-
-        alpha_net.eval()
-        with torch.no_grad():
-            pred = alpha_net(feat_tensor)
-
-        alpha = float(pred.squeeze().cpu().item())
-        alpha = float(np.clip(alpha, self._alpha_min, self._alpha_max))
+        # Delegate feature extraction + inference to the network itself
+        # so feature dim always matches whatever checkpoint is loaded.
+        alpha = alpha_net.predict_alpha(query, query_emb, domain="")
+        alpha = float(__import__("numpy").clip(alpha, self._alpha_min, self._alpha_max))
         logger.debug("Alpha network predicted alpha=%.3f", alpha)
         return alpha
 

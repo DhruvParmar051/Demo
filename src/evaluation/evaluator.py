@@ -12,6 +12,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import re as _re
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -174,7 +175,6 @@ class Evaluator:
             # and "citations"; fall back to legacy "gold_answer"/"gold_citations".
             raw_gold_answer = item.get("gold_answer") or item.get("answer_with_citations", "")
             # Strip inline citation markers [hex:start-end] before scoring.
-            import re as _re
             gold_answer = _re.sub(r"\[[0-9a-f]{8,}:\d+-\d+\]", "", raw_gold_answer).strip()
             gold_citations = item.get("citations", item.get("gold_citations", []))
             needed_tool = item.get("needed_tool")
@@ -195,37 +195,48 @@ class Evaluator:
 
             gold_chunk_ids = item.get("gold_chunk_ids", [])
             if gold_chunk_ids:
-                # Try chunk_id first (M5 path); fall back to doc_id comparison
-                # for baseline pipelines that only populate doc_id on citations.
-                # IMPORTANT: when falling back to doc_ids, compare against gold
-                # doc_ids (not gold chunk_ids) to avoid a doc_id vs chunk_id
-                # format mismatch that would always produce recall = 0.
-                chunk_ids = [c.chunk_id for c in response.citations if c.chunk_id]
-                if chunk_ids and any(rid in gold_chunk_ids for rid in chunk_ids):
-                    row["recall_at_20"] = recall_at_k(chunk_ids, gold_chunk_ids, k=20)
+                # Prefer the full retrieved list (stored before max_citations truncation)
+                # so recall@20 measures true retrieval depth, not just the 2-3 final citations.
+                all_retrieved_chunk_ids = getattr(response, "retrieved_chunk_ids", [])
+                if all_retrieved_chunk_ids:
+                    row["recall_at_20"] = recall_at_k(all_retrieved_chunk_ids, gold_chunk_ids, k=20)
                 else:
-                    gold_doc_ids_for_recall = [
-                        c["doc_id"]
-                        for c in gold_citations
-                        if isinstance(c, dict) and c.get("doc_id")
-                    ]
-                    if gold_doc_ids_for_recall:
-                        retrieved_doc_ids = [
-                            c.doc_id for c in response.citations if c.doc_id
-                        ]
-                        row["recall_at_20"] = recall_at_k(
-                            retrieved_doc_ids, gold_doc_ids_for_recall, k=20
-                        )
+                    # Fallback for baselines / old responses without retrieved_chunk_ids.
+                    chunk_ids = [c.chunk_id for c in response.citations if c.chunk_id]
+                    if chunk_ids and any(rid in gold_chunk_ids for rid in chunk_ids):
+                        row["recall_at_20"] = recall_at_k(chunk_ids, gold_chunk_ids, k=20)
                     else:
-                        row["recall_at_20"] = float("nan")
+                        # Last resort: compare doc_ids
+                        gold_doc_ids_for_recall = [
+                            c["doc_id"]
+                            for c in gold_citations
+                            if isinstance(c, dict) and c.get("doc_id")
+                        ]
+                        if gold_doc_ids_for_recall:
+                            retrieved_doc_ids = [
+                                c.doc_id for c in response.citations if c.doc_id
+                            ]
+                            row["recall_at_20"] = recall_at_k(
+                                retrieved_doc_ids, gold_doc_ids_for_recall, k=20
+                            )
+                        else:
+                            row["recall_at_20"] = float("nan")
             else:
-                # Fall back: use doc_ids from citations against gold citation doc_ids.
+                # No gold_chunk_ids: use doc_ids from citations against gold citation doc_ids.
+                all_retrieved_chunk_ids = getattr(response, "retrieved_chunk_ids", [])
                 gold_doc_ids_for_recall = [
                     c["doc_id"] for c in gold_citations
                     if isinstance(c, dict) and c.get("doc_id")
                 ]
                 if gold_doc_ids_for_recall:
-                    retrieved_doc_ids = [c.doc_id for c in response.citations]
+                    if all_retrieved_chunk_ids:
+                        # Map chunk_ids to doc_ids using a best-effort prefix heuristic:
+                        # chunk_id encodes doc_id via sha256, so we compare doc_ids from citations.
+                        retrieved_doc_ids = list(dict.fromkeys(
+                            c.doc_id for c in response.citations if c.doc_id
+                        ))
+                    else:
+                        retrieved_doc_ids = [c.doc_id for c in response.citations]
                     row["recall_at_20"] = recall_at_k(
                         retrieved_doc_ids, gold_doc_ids_for_recall, k=20
                     )

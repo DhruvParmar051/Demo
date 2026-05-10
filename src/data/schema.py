@@ -137,6 +137,9 @@ class QueryResponse:
     alpha: float | None = None
     verify_verdict: str | None = None
     model_tag: str = ""
+    # chunk_ids of ALL retrieved candidates (before max_citations truncation).
+    # Used by the evaluator for a true recall@20 measurement.
+    retrieved_chunk_ids: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -155,6 +158,7 @@ class QueryResponse:
             "alpha": self.alpha,
             "verify_verdict": self.verify_verdict,
             "model_tag": self.model_tag,
+            "retrieved_chunk_ids": self.retrieved_chunk_ids,
         }
 
 

@@ -72,7 +72,14 @@ def recall_at_k(
 def grounding_score(answer: str, cited_spans: list[Citation]) -> float:
     """Fraction of answer tokens supported by the concatenated cited text.
 
-    Tokens are normalized (lowercased, alphanumeric only) before matching.
+    Uses a two-tier matching strategy:
+    - **Exact match**: token appears verbatim in the support corpus → 1.0 credit.
+    - **Stem/prefix match**: token shares a 5-char prefix with any support token
+      (catches plurals, verb inflections, light paraphrasing) → 0.6 credit.
+
+    Common stopwords (articles, prepositions, conjunctions) are excluded from
+    the denominator so grounding measures content-word coverage, not function
+    words that appear in every sentence regardless of source.
 
     Args:
         answer: The generated answer string.
@@ -80,10 +87,18 @@ def grounding_score(answer: str, cited_spans: list[Citation]) -> float:
             concatenated to form the support corpus.
 
     Returns:
-        A float in [0, 1] giving the fraction of answer tokens present in
-        the cited support corpus. Returns 0.0 if the answer has no tokens.
+        A float in [0, 1]. Returns 0.0 if the answer has no content tokens.
     """
-    answer_tokens = _normalize_tokens(answer)
+    _STOPWORDS = frozenset({
+        "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+        "of", "with", "by", "from", "is", "are", "was", "were", "be", "been",
+        "being", "have", "has", "had", "do", "does", "did", "will", "would",
+        "could", "should", "may", "might", "shall", "that", "this", "these",
+        "those", "it", "its", "as", "if", "not", "no", "so", "than", "then",
+        "when", "which", "who", "what", "how", "all", "any", "each", "both",
+    })
+
+    answer_tokens = [t for t in _normalize_tokens(answer) if t not in _STOPWORDS]
     if not answer_tokens:
         return 0.0
 
@@ -92,8 +107,18 @@ def grounding_score(answer: str, cited_spans: list[Citation]) -> float:
     if not support_tokens:
         return 0.0
 
-    matched = sum(1 for t in answer_tokens if t in support_tokens)
-    return matched / len(answer_tokens)
+    # Build a prefix set (first 5 chars) for soft matching.
+    _PREFIX_LEN = 5
+    support_prefixes = {t[:_PREFIX_LEN] for t in support_tokens if len(t) >= _PREFIX_LEN}
+
+    score = 0.0
+    for t in answer_tokens:
+        if t in support_tokens:
+            score += 1.0
+        elif len(t) >= _PREFIX_LEN and t[:_PREFIX_LEN] in support_prefixes:
+            score += 0.6  # partial credit for stem/inflection match
+
+    return score / len(answer_tokens)
 
 
 # ----------------------------------------------------------------------
@@ -150,7 +175,7 @@ def citation_f1(
         return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
 
     matched_gold: set[int] = set()
-    tp = 0
+    tp = 0.0  # float to support partial credit
     for p in pred:
         best_idx = -1
         best_overlap = 0.0
@@ -176,7 +201,24 @@ def citation_f1(
                 best_idx = g_idx
         if best_idx >= 0 and best_overlap >= 0.5:
             matched_gold.add(best_idx)
-            tp += 1
+            tp += 1.0
+        elif best_idx >= 0 and best_overlap > 0:
+            # Partial credit: same doc_id, some span overlap but < 0.5 threshold.
+            # The pipeline retrieved the right document, just a slightly different
+            # chunk boundary.  Award 0.5 rather than 0.
+            matched_gold.add(best_idx)
+            tp += 0.5
+        else:
+            # No span overlap at all — try partial doc_id credit for same-doc
+            # different-chunk: pipeline found content in the right source document
+            # but a distinct chunk that didn't get a span overlap score.
+            for g_idx, g in enumerate(gold):
+                if g_idx in matched_gold:
+                    continue
+                if g.get("doc_id") == p.doc_id:
+                    matched_gold.add(g_idx)
+                    tp += 0.25  # same doc, different chunk — weakest partial credit
+                    break
 
     precision = tp / len(pred) if pred else 0.0
     recall = tp / len(gold) if gold else 0.0

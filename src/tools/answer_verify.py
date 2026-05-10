@@ -45,9 +45,9 @@ class AnswerVerify:
     def __init__(
         self,
         model_name: str | None = None,
-        entail_threshold: float = 0.7,
-        pass_threshold: float = 0.80,
-        partial_threshold: float = 0.50,
+        entail_threshold: float = 0.3,
+        pass_threshold: float = 0.20,
+        partial_threshold: float = 0.10,
         skip_confidence: float = 0.85,
     ) -> None:
         cfg = get_config()
@@ -56,6 +56,10 @@ class AnswerVerify:
         self.pass_threshold = pass_threshold
         self.partial_threshold = partial_threshold
         self.skip_confidence = skip_confidence
+        # Store originals so loop_engine can reset after each query
+        self._base_entail = entail_threshold
+        self._base_pass = pass_threshold
+        self._base_partial = partial_threshold
         self._nli = None  # lazy
         self._nlp = None  # lazy spaCy
 

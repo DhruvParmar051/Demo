@@ -36,11 +36,22 @@ def _load_bm25(path: str | None) -> BM25Index:
     if path:
         try:
             idx.load(path)
+            logger.info("BM25 index loaded from %s (%d docs)", path, idx.size)
         except FileNotFoundError:
             logger.warning("BM25 index not found at %s; returning empty index.", path)
         except Exception as exc:
             logger.warning("Failed to load BM25 index: %s", exc)
     return idx
+
+
+def _bm25_path_from_cfg(cfg: Any) -> str | None:
+    """Resolve BM25 index path from config — handles both cfg.data and cfg.paths."""
+    # Primary: cfg.data.bm25_index_path (correct location in base.yaml)
+    path = getattr(getattr(cfg, "data", None), "bm25_index_path", None)
+    if path:
+        return path
+    # Fallback: cfg.paths.bm25_index (legacy)
+    return getattr(getattr(cfg, "paths", None), "bm25_index", None)
 
 
 class _BaselineBase:
@@ -112,8 +123,8 @@ class _BaselineBase:
         for rr in context:
             chunk = rr.chunk
             cited_text = chunk.text.strip()
-            if len(cited_text) > 500:
-                cited_text = cited_text[:497] + "..."
+            if len(cited_text) > 2000:
+                cited_text = cited_text[:1997] + "..."
             citations.append(Citation(
                 doc_id=chunk.doc_id,
                 chunk_id=chunk.chunk_id,
@@ -137,9 +148,12 @@ class BaselineB1(_BaselineBase):
 
     def run(self, query: str) -> QueryResponse:
         t_start = time.perf_counter()
-        top_k = int(self.cfg.retrieval.rerank_top_k)
+        # Retrieve top_k candidates, then pass only top max_citations to generator
+        # (no reranker in B1 — rank by dense score directly)
+        top_k = int(self.cfg.retrieval.top_k)
+        max_cit = int(getattr(self.cfg.retrieval, "max_citations", 2))
         dense = self.vector_store.query(query, top_k=top_k)
-        context = self._build_contexts(dense)
+        context = self._build_contexts(dense[:max_cit])
         answer = self.generator.generate(query=query, context=context)
         citations = self._citations_from_context(context)
         return self._to_response(query, answer, citations, t_start)
@@ -153,7 +167,7 @@ class BaselineB2(_BaselineBase):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         if self.bm25_index is None:
-            self.bm25_index = _load_bm25(getattr(self.cfg.paths, "bm25_index", None))
+            self.bm25_index = _load_bm25(_bm25_path_from_cfg(self.cfg))
         if self.reranker is None:
             self.reranker = ColBERTReranker()
         self.retriever = HybridRetriever(
@@ -164,13 +178,14 @@ class BaselineB2(_BaselineBase):
 
     def run(self, query: str) -> QueryResponse:
         t_start = time.perf_counter()
+        max_cit = int(getattr(self.cfg.retrieval, "max_citations", 2))
         retrieved = self.retriever.retrieve(
             query, top_k=int(self.cfg.retrieval.top_k), alpha=0.5
         )
         reranked = self.reranker.rerank(
             query, retrieved, top_k=int(self.cfg.retrieval.rerank_top_k)
         )
-        context = self._build_contexts(reranked)
+        context = self._build_contexts(reranked[:max_cit])
         answer = self.generator.generate(query=query, context=context)
         citations = self._citations_from_context(context)
         return self._to_response(query, answer, citations, t_start)
@@ -184,34 +199,20 @@ class BaselineB3(_BaselineBase):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         cfg = self.cfg
-        # Try loading fine-tuned components from disk.
-        retriever_ckpt = getattr(cfg.checkpoints, "retriever", None)
         reranker_ckpt = getattr(cfg.checkpoints, "reranker", None)
-        sft_adapter = getattr(cfg.checkpoints, "generator_sft", None)
 
-        # ChromaDB was indexed with the base embedding model; querying with the
-        # fine-tuned retriever checkpoint shifts the embedding space and causes
-        # ~50% of queries to return zero candidates.  Use base model for querying.
         if self.bm25_index is None:
-            self.bm25_index = _load_bm25(getattr(cfg.paths, "bm25_index", None))
+            self.bm25_index = _load_bm25(_bm25_path_from_cfg(cfg))
         if self.reranker is None:
             try:
                 self.reranker = ColBERTReranker(checkpoint_path=reranker_ckpt)
             except Exception:
                 self.reranker = ColBERTReranker()
 
-        # Use the pre-merged SFT GGUF so adapter weights are actually applied.
-        # GGUF (llama-cpp) cannot load HF LoRA adapters at runtime.
-        legacy_gguf = Path(getattr(cfg.models.generator, "gguf_path", "checkpoints/aegis_final.gguf"))
-        sft_gguf = legacy_gguf.parent / "aegis_sft.gguf"
-        chosen_gguf = sft_gguf if sft_gguf.exists() else legacy_gguf
-        if not sft_gguf.exists():
-            logger.warning(
-                "aegis_sft.gguf not found; falling back to %s. "
-                "Run: python scripts/convert_to_gguf.py --variant sft",
-                chosen_gguf,
-            )
-        self.generator = Generator(gguf_path=str(chosen_gguf))
+        # B3 uses base (untrained) generator — trained generators reserved for M1-M5.
+        cfg_gguf = getattr(cfg.models.generator, "gguf_path", "")
+        base_gguf = Path(cfg_gguf).parent / "aegis_base.gguf" if cfg_gguf else Path("checkpoints/aegis_base.gguf")
+        self.generator = Generator(gguf_path=str(base_gguf) if base_gguf.exists() else None)
 
         self.retriever = HybridRetriever(
             vector_store=self.vector_store,
@@ -221,13 +222,14 @@ class BaselineB3(_BaselineBase):
 
     def run(self, query: str) -> QueryResponse:
         t_start = time.perf_counter()
+        max_cit = int(getattr(self.cfg.retrieval, "max_citations", 2))
         retrieved = self.retriever.retrieve(
             query, top_k=int(self.cfg.retrieval.top_k), alpha=0.5
         )
         reranked = self.reranker.rerank(
             query, retrieved, top_k=int(self.cfg.retrieval.rerank_top_k)
         )
-        context = self._build_contexts(reranked)
+        context = self._build_contexts(reranked[:max_cit])
         answer = self.generator.generate(query=query, context=context)
         citations = self._citations_from_context(context)
         return self._to_response(query, answer, citations, t_start)

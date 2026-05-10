@@ -296,13 +296,21 @@ def train(cfg: Any = None) -> dict[str, Any]:
             "labels":         _torch.tensor(labels,         dtype=_torch.long),
         }
 
-    trainer = MpsSafeTrainer(
-        model=model,
-        args=args,
-        train_dataset=ds,
-        data_collator=collate_fn,
-        processing_class=tokenizer,
-    )
+    # processing_class is the modern param name (transformers >= 4.45); fall back
+    # to the legacy tokenizer= kwarg on older installations.
+    import inspect as _inspect
+    _trainer_sig = _inspect.signature(MpsSafeTrainer.__init__)
+    _trainer_kwargs: dict = {
+        "model": model,
+        "args": args,
+        "train_dataset": ds,
+        "data_collator": collate_fn,
+    }
+    if "processing_class" in _trainer_sig.parameters:
+        _trainer_kwargs["processing_class"] = tokenizer
+    else:
+        _trainer_kwargs["tokenizer"] = tokenizer
+    trainer = MpsSafeTrainer(**_trainer_kwargs)
 
     trainer.train(resume_from_checkpoint=last_checkpoint)
 
