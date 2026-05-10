@@ -134,7 +134,7 @@ class CGALLoopEngine:
         self.max_iterations = int(self.cfg.cgal.max_iterations)
         self.top_k = int(self.cfg.retrieval.top_k)
         self.rerank_top_k = int(self.cfg.retrieval.rerank_top_k)
-        self.max_citations = int(getattr(self.cfg.retrieval, "max_citations", 2))
+        self.max_citations = max(int(getattr(self.cfg.retrieval, "max_citations", 5)), 5)
         # Only enable decomposition when a decomposer is actually provided.
         # Reading from config alone would enable it for m2/m3/m4 which have
         # no decomposer object, causing silent no-ops on every query.

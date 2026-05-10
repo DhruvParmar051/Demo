@@ -148,12 +148,11 @@ class BaselineB1(_BaselineBase):
 
     def run(self, query: str) -> QueryResponse:
         t_start = time.perf_counter()
-        # Retrieve top_k candidates, then pass only top max_citations to generator
-        # (no reranker in B1 — rank by dense score directly)
+        # Retrieve top_k candidates, pass top 5 to generator for better grounding
         top_k = int(self.cfg.retrieval.top_k)
-        max_cit = int(getattr(self.cfg.retrieval, "max_citations", 2))
+        max_cit = int(getattr(self.cfg.retrieval, "max_citations", 5))
         dense = self.vector_store.query(query, top_k=top_k)
-        context = self._build_contexts(dense[:max_cit])
+        context = self._build_contexts(dense[:max(max_cit, 5)])
         answer = self.generator.generate(query=query, context=context)
         citations = self._citations_from_context(context)
         return self._to_response(query, answer, citations, t_start)
@@ -178,14 +177,14 @@ class BaselineB2(_BaselineBase):
 
     def run(self, query: str) -> QueryResponse:
         t_start = time.perf_counter()
-        max_cit = int(getattr(self.cfg.retrieval, "max_citations", 2))
+        max_cit = int(getattr(self.cfg.retrieval, "max_citations", 5))
         retrieved = self.retriever.retrieve(
             query, top_k=int(self.cfg.retrieval.top_k), alpha=0.5
         )
         reranked = self.reranker.rerank(
             query, retrieved, top_k=int(self.cfg.retrieval.rerank_top_k)
         )
-        context = self._build_contexts(reranked[:max_cit])
+        context = self._build_contexts(reranked[:max(max_cit, 5)])
         answer = self.generator.generate(query=query, context=context)
         citations = self._citations_from_context(context)
         return self._to_response(query, answer, citations, t_start)
@@ -222,14 +221,14 @@ class BaselineB3(_BaselineBase):
 
     def run(self, query: str) -> QueryResponse:
         t_start = time.perf_counter()
-        max_cit = int(getattr(self.cfg.retrieval, "max_citations", 2))
+        max_cit = int(getattr(self.cfg.retrieval, "max_citations", 5))
         retrieved = self.retriever.retrieve(
             query, top_k=int(self.cfg.retrieval.top_k), alpha=0.5
         )
         reranked = self.reranker.rerank(
             query, retrieved, top_k=int(self.cfg.retrieval.rerank_top_k)
         )
-        context = self._build_contexts(reranked[:max_cit])
+        context = self._build_contexts(reranked[:max(max_cit, 5)])
         answer = self.generator.generate(query=query, context=context)
         citations = self._citations_from_context(context)
         return self._to_response(query, answer, citations, t_start)

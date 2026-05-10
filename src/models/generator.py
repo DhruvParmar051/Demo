@@ -29,16 +29,28 @@ logger = logging.getLogger(__name__)
 
 # Stop sequences that prevent repetitive / out-of-role generation.
 _STOP = [
+    # Chat turn delimiters
     "<|user|>", "<|system|>", "<|context|>", "<|assistant|>",
-    "\n\nIf you need further", "\n\nPlease provide more", "\n\nIf you have any other",
+    "<|end|>", "<|/assistant|>", "<|endoftext|>",
+    # Common hallucinated follow-up patterns
+    "\nHuman:", "\n\nHuman:", "Human: Can", "Human: What",
+    "\nUser:", "\n\nUser:",
+    "\nAssistant:", "\n\nAssistant:",
+    # Filler phrases that indicate model is rambling
+    "\n\nIf you need further", "\n\nPlease provide more",
+    "\n\nIf you have any other", "\n\nIs there anything else",
+    "\n\nWould you like", "\n\nCan you provide more",
+    "\n\nSummarize", "\n\nCertainly!", "\n\nOf course!",
 ]
 
 SYSTEM_PROMPT = (
-    "You are AegisRAG, a grounded customer-support assistant. "
-    "Answer the user's question using only the provided context sources. "
-    "Write a thorough response of 5 to 6 sentences, covering the key details and explaining the concept clearly. "
+    "You are AegisRAG, a precise customer-support assistant. "
+    "Answer the user's question using ONLY the information in the provided context. "
+    "Use the exact wording and key phrases from the context as much as possible — do not paraphrase unnecessarily. "
+    "Be concise and direct — 2 to 4 sentences maximum. "
+    "Do not add follow-up questions, suggestions, or extra commentary after your answer. "
     "Do not include reference markers, IDs, or bracket codes in your answer. "
-    "If the context is insufficient to answer, say so explicitly."
+    "If the context does not contain the answer, say exactly: 'The provided context does not contain information about this.'"
 )
 
 _CITATION_RE = re.compile(r"\[([^\]:]+):(\d+)-(\d+)\]")
@@ -142,7 +154,13 @@ class Generator:
             raw = self._generate_gguf(full_prompt, tokens, temperature)
         else:
             raw = self._generate_hf(full_prompt, tokens, temperature)
-        return _CITATION_RE.sub("", raw).strip()
+        raw = _CITATION_RE.sub("", raw).strip()
+        # Hard-truncate at any leaked stop pattern (GGUF doesn't always honour them)
+        for stop in _STOP:
+            idx = raw.find(stop)
+            if idx != -1:
+                raw = raw[:idx].strip()
+        return raw
 
     def stream(
         self,

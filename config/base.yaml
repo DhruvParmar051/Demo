@@ -46,7 +46,7 @@ models:
 retrieval:
   top_k: 50
   rerank_top_k: 10
-  max_citations: 3
+  max_citations: 5
   chunk_size: 256
   chunk_overlap: 96
   min_chunk_size: 30
