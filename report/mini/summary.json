@@ -1,21 +1,21 @@
 {
   "per_model": {
     "m5": {
-      "grounding": 0.5023125372870885,
-      "citation_f1": 0.13333333333333333,
-      "citation_precision": 0.1,
+      "grounding": 0.5095199793901923,
+      "citation_f1": 0.1,
+      "citation_precision": 0.06666666666666667,
       "citation_recall": 0.2,
-      "bertscore_f1": 0.8749679267406464,
-      "recall_at_20": 0.2,
-      "fcrs": 0.5937312905987103,
-      "completeness": 0.8749679267406464,
-      "citation_coverage": 0.2,
+      "bertscore_f1": 0.874142336845398,
+      "recall_at_20": 0.0,
+      "fcrs": 0.6349163631598155,
+      "completeness": 0.874142336845398,
+      "citation_coverage": 0.3,
       "tool_appropriateness": 1.0,
       "escalation_accuracy_per_query": 1.0,
-      "latency_p50": 83342.720874527,
-      "latency_p95": 148336.89462485482,
-      "latency_mean": 91855.80567900324,
-      "cgal_efficiency": 2.4
+      "latency_p50": 56104.16129149962,
+      "latency_p95": 70770.71403288865,
+      "latency_mean": 55969.618062407244,
+      "cgal_efficiency": 2.0
     }
   },
   "bootstrap_p_values_vs_reference": {},

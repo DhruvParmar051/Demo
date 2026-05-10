@@ -641,7 +641,7 @@ class CGALLoopEngine:
         # Store all reranked chunk_ids so the evaluator can compute true recall@20
         # without being limited by the max_citations cap on citations.
         response.retrieved_chunk_ids = [
-            r.chunk.chunk_id for r in state.reranked if r.chunk.chunk_id
+            chunk.chunk_id for chunk, _s in state.reranked if chunk.chunk_id
         ]
         response.tool_calls.append(
             ToolCall(

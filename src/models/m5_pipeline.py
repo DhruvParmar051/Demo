@@ -155,7 +155,15 @@ class M5Pipeline:
             self.reranker = reranker
         else:
             reranker_ckpt = getattr(cfg.checkpoints, "reranker", None)
-            if reranker_ckpt and Path(reranker_ckpt).exists():
+            # Only load the fine-tuned checkpoint when it has been validated to
+            # improve recall over the base model.  The current checkpoint at
+            # checkpoints/reranker was found to actively hurt recall (gold chunk
+            # rank 0 on base → absent from top-10 after fine-tuning), so we skip
+            # it until the reranker is retrained with better negative mining.
+            # To re-enable: set use_finetuned_reranker: true in config or pass
+            # a reranker instance directly.
+            _use_ft = getattr(getattr(cfg, "checkpoints", None), "use_finetuned_reranker", False)
+            if _use_ft and reranker_ckpt and Path(reranker_ckpt).exists():
                 try:
                     self.reranker = ColBERTReranker(checkpoint_path=reranker_ckpt)
                     logger.info("Loaded fine-tuned reranker from %s", reranker_ckpt)
@@ -164,6 +172,12 @@ class M5Pipeline:
                     self.reranker = ColBERTReranker()
             else:
                 self.reranker = ColBERTReranker()
+                if reranker_ckpt and Path(reranker_ckpt).exists():
+                    logger.info(
+                        "Fine-tuned reranker checkpoint found at %s but skipped "
+                        "(use_finetuned_reranker=false). Using base model.",
+                        reranker_ckpt,
+                    )
 
         # Select the pre-merged GGUF for this variant so that adapter weights are
         # actually applied at inference time.  GGUF (llama-cpp) cannot load HF

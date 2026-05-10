@@ -95,17 +95,19 @@ training:
   report_to: "none"
 
   retriever:
-    learning_rate: 2.0e-5
+    learning_rate: 5.0e-6   # lowered from 2e-5 — top-4 layers are already warm, smaller steps
     num_epochs: 3
-    batch_size: 32
+    batch_size: 32       # used on GPU; overridden by mac_batch_size on Mac
+    mac_batch_size: 4    # slightly larger batch = less gradient noise on MPS
     warmup_ratio: 0.1
     weight_decay: 0.01
     max_grad_norm: 1.0
     negatives_per_query: 7
-    hard_negatives: 7 # alias read by train_retriever.py
+    hard_negatives: 7
     hard_negative_mining: true
     in_batch_negatives: true
-    loss: "infonce" # infonce | triplet_margin
+    trainable_top_layers: 4  # freeze bottom 20/24 BGE-m3 layers to fit on Mac
+    loss: "infonce"
     triplet_margin: 0.2
     temperature: 0.05
     output_dir: "checkpoints/retriever"
@@ -118,7 +120,9 @@ training:
     weight_decay: 0.01
     max_grad_norm: 1.0
     max_seq_length: 512
-    pos_neg_ratio: 2.0 # negatives per positive; read by train_reranker.py
+    pos_neg_ratio: 2.0 # kept for backward compat; superseded by hard/random_negatives
+    hard_negatives: 5  # BM25 top-k non-gold chunks per query (hard negatives)
+    random_negatives: 2  # random citations from other queries (easy negatives)
     loss: "cross_entropy"
     label_smoothing: 0.1
     output_dir: "checkpoints/reranker"
@@ -280,6 +284,17 @@ evaluation:
     - "confidence_auroc"
   bertscore_model: "microsoft/deberta-xlarge-mnli"
   num_bootstrap_samples: 1000
+
+# ---------------------------------------------------------------------------
+# Checkpoint Paths
+# ---------------------------------------------------------------------------
+checkpoints:
+  reranker: "checkpoints/reranker"
+  confidence_head: "checkpoints/confidence_head"
+  alpha_network: "checkpoints/alpha_network"
+  generator_sft: "checkpoints/generator_sft"
+  dpo: "checkpoints/dpo"
+  use_finetuned_reranker: true   # set false to fall back to base cross-encoder
 
 # ---------------------------------------------------------------------------
 # Logging

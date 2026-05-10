@@ -104,13 +104,15 @@ class RetrieverTrainingConfig(BaseModel):
     learning_rate: float = 2.0e-5
     num_epochs: int = 3
     batch_size: int = 32
+    mac_batch_size: int = 2       # safe batch size for Apple Silicon MPS
     warmup_ratio: float = 0.1
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
     negatives_per_query: int = 7
     hard_negative_mining: bool = True
-    hard_negatives: int = 3
+    hard_negatives: int = 7
     in_batch_negatives: bool = True
+    trainable_top_layers: int = 4  # freeze bottom layers to fit on Mac
     loss: str = "infonce"
     triplet_margin: float = 0.2
     temperature: float = 0.05
@@ -132,6 +134,9 @@ class RerankerTrainingConfig(BaseModel):
     loss: str = "cross_entropy"
     label_smoothing: float = 0.1
     pos_neg_ratio: float = 2.0
+    hard_negatives: int = 5
+    random_negatives: int = 2
+    use_finetuned_reranker: bool = True
     output_dir: str = "checkpoints/reranker"
 
     @property
@@ -466,6 +471,11 @@ class AegisConfig(BaseSettings):
             confidence_head=t.confidence_head.output_dir,
             alpha_network=t.alpha_network.output_dir,
             decomposer=t.decomposer.output_dir,
+            # Whether to load the fine-tuned reranker checkpoint at inference.
+            # Set false to fall back to the base cross-encoder model.
+            use_finetuned_reranker=bool(
+                getattr(t.reranker, "use_finetuned_reranker", True)
+            ),
         )
 
     @property
