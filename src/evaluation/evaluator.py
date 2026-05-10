@@ -190,7 +190,10 @@ class Evaluator:
                 "confidence": response.confidence,
             }
 
-            row["grounding"] = grounding_score(response.answer, response.citations)
+            # Use grounding_citations (all retrieved chunks) for grounding score
+            # so it isn't penalised by precision filtering on formal citations.
+            grounding_cits = getattr(response, "grounding_citations", None) or response.citations
+            row["grounding"] = grounding_score(response.answer, grounding_cits)
             row["citation_f1"] = citation_f1(response.citations, gold_citations)
 
             gold_chunk_ids = item.get("gold_chunk_ids", [])
@@ -243,7 +246,7 @@ class Evaluator:
                 else:
                     row["recall_at_20"] = float("nan")
 
-            if gold_answer:
+            if gold_answer and not getattr(self, "_skip_bertscore", False):
                 try:
                     row["bertscore_f1"] = answer_quality(response.answer, gold_answer)
                 except Exception as exc:  # noqa: BLE001

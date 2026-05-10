@@ -166,11 +166,17 @@ def cmd_train(args: argparse.Namespace, cfg: dict) -> None:
 def cmd_evaluate(args: argparse.Namespace, cfg: dict) -> None:
     """Evaluate one or more model configurations."""
     from src.evaluation.evaluate import run_evaluation
+    from src.evaluation.evaluator import Evaluator
 
     models = [m.strip() for m in args.models.split(",")]
     # --test-file takes priority over --test-dir
     test_path = getattr(args, "test_file", None) or args.test_dir or "data/test"
     output_dir = args.output_dir or "report"
+
+    # --fast: skip BERTScore to save ~30s per model
+    if getattr(args, "fast", False):
+        Evaluator._skip_bertscore = True
+        logger.info("Fast mode: BERTScore disabled.")
 
     logger.info("Evaluating models: {}", ", ".join(models))
     run_evaluation(
@@ -345,6 +351,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("--test-dir", type=str, default=None, help="Directory with test data")
     p_eval.add_argument("--test-file", type=str, default=None, help="Direct path to a specific test JSONL file (overrides --test-dir)")
     p_eval.add_argument("--output-dir", type=str, default=None, help="Directory for evaluation reports")
+    p_eval.add_argument("--fast", action="store_true", help="Skip BERTScore (saves ~30s per model)")
 
     # --- serve ---
     p_serve = subparsers.add_parser("serve", help="Launch FastAPI server")

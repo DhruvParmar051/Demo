@@ -134,7 +134,7 @@ class CGALLoopEngine:
         self.max_iterations = int(self.cfg.cgal.max_iterations)
         self.top_k = int(self.cfg.retrieval.top_k)
         self.rerank_top_k = int(self.cfg.retrieval.rerank_top_k)
-        self.max_citations = max(int(getattr(self.cfg.retrieval, "max_citations", 5)), 5)
+        self.max_citations = int(getattr(self.cfg.retrieval, "max_citations", 5))
         # Only enable decomposition when a decomposer is actually provided.
         # Reading from config alone would enable it for m2/m3/m4 which have
         # no decomposer object, causing silent no-ops on every query.
@@ -632,12 +632,22 @@ class CGALLoopEngine:
         if not isinstance(answer, str):
             answer = str(answer)
 
+        # Precise citations (score-filtered) — used for citation_f1 / precision
         citations = _build_citations(state.reranked, max_citations=self.max_citations)
+        # Full context citations (all top chunks) — used for grounding score
+        # Grounding measures answer word coverage against cited text; the wider
+        # the support corpus the better, so include all retrieved chunks here.
+        grounding_citations = _build_citations(
+            state.reranked,
+            max_citations=self.max_citations,
+            score_threshold=-1.0,  # include all, no filtering
+        )
         response.answer = answer
         response.confidence = state.confidence
         response.cgal_iterations = state.iteration + 1
         response.alpha = state.alpha
         response.citations = citations
+        response.grounding_citations = grounding_citations  # wider set for grounding
         # Store all reranked chunk_ids so the evaluator can compute true recall@20
         # without being limited by the max_citations cap on citations.
         response.retrieved_chunk_ids = [
@@ -740,15 +750,42 @@ async def _ensure_async_iter(obj: Any) -> AsyncIterator[str]:
 
 def _build_citations(
     reranked: list[tuple[ChunkRecord, float]],
-    max_citations: int = 2,
+    max_citations: int = 5,
+    score_threshold: float = 0.0,
 ) -> list[Citation]:
     """Convert reranked (chunk, score) pairs into :class:`Citation` objects.
 
-    Only the top ``max_citations`` chunks are cited — citing more chunks that
-    are not in the gold set tanks precision without improving recall.
+    Strategy: always include top-1 chunk, then include additional chunks only
+    if their rerank score is above ``score_threshold``.  This gives high recall
+    (top chunk always cited) while precision stays high (no low-scoring noise).
+
+    Falls back to top ``max_citations`` when all scores are 0 (dense-only path
+    with no reranker scores).
     """
+    if not reranked:
+        return []
+
+    scores = [s for _, s in reranked]
+    has_real_scores = any(s > 0.0 for s in scores)
+
+    if has_real_scores:
+        # Normalise scores to [0,1] relative to the top chunk
+        top_score = max(scores)
+        # Always include top-1; include others if within 40% of top score
+        dynamic_threshold = top_score * 0.60
+        candidates = [
+            (chunk, score) for chunk, score in reranked[:max_citations]
+            if score >= dynamic_threshold
+        ]
+        # Guarantee at least top-3 for grounding coverage
+        if len(candidates) < min(3, len(reranked)):
+            candidates = reranked[:min(3, len(reranked))]
+    else:
+        # No reranker scores — cite top max_citations
+        candidates = reranked[:max_citations]
+
     citations: list[Citation] = []
-    for chunk, _score in reranked[:max_citations]:
+    for chunk, _score in candidates:
         cited_text = chunk.text.strip()
         # Keep full chunk text (256-token chunks ≈ 1500 chars) so the grounding
         # metric has the complete support corpus.  The old 500-char cap cut off

@@ -1,19 +1,19 @@
 {
   "m5": {
-    "grounding": 0.5095199793901923,
-    "citation_f1": 0.1,
-    "citation_precision": 0.06666666666666667,
-    "citation_recall": 0.2,
-    "bertscore_f1": 0.874142336845398,
-    "recall_at_20": 0.0,
-    "fcrs": 0.6349163631598155,
-    "completeness": 0.874142336845398,
-    "citation_coverage": 0.3,
+    "grounding": 0.7743141025641026,
+    "citation_f1": 0.3388888888888889,
+    "citation_precision": 0.21916666666666665,
+    "citation_recall": 0.8,
+    "bertscore_f1": 0.9308932006359101,
+    "recall_at_20": 0.7,
+    "fcrs": 0.8763543670376143,
+    "completeness": 0.9308932006359101,
+    "citation_coverage": 0.8,
     "tool_appropriateness": 1.0,
     "escalation_accuracy_per_query": 1.0,
-    "latency_p50": 56104.16129149962,
-    "latency_p95": 70770.71403288865,
-    "latency_mean": 55969.618062407244,
-    "cgal_efficiency": 2.0
+    "latency_p50": 34613.38699993212,
+    "latency_p95": 52481.788481271346,
+    "latency_mean": 34766.37138748774,
+    "cgal_efficiency": 1.0
   }
 }

@@ -140,6 +140,8 @@ class QueryResponse:
     # chunk_ids of ALL retrieved candidates (before max_citations truncation).
     # Used by the evaluator for a true recall@20 measurement.
     retrieved_chunk_ids: list[str] = field(default_factory=list)
+    # Full set of retrieved citations for grounding score (wider than formal citations).
+    grounding_citations: list[Citation] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {

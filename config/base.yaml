@@ -53,8 +53,8 @@ retrieval:
   bm25_k1: 1.5
   bm25_b: 0.75
   bm25_epsilon: 0.25
-  initial_alpha: 0.5 # dense weight in hybrid fusion (1-alpha = BM25 weight)
-  alpha_min: 0.1
+  initial_alpha: 0.6 # dense weight in hybrid fusion (1-alpha = BM25 weight)
+  alpha_min: 0.4   # floor: never go more than 60% sparse — dense wins on these docs
   alpha_max: 0.9
   similarity_metric: "cosine"
   dedup_threshold: 0.92 # MinHash near-dup threshold during ingestion
@@ -64,15 +64,15 @@ retrieval:
 # ---------------------------------------------------------------------------
 cgal:
   max_iterations: 2
-  high_confidence: 0.35 # answer directly; calibrated to observed conf-head range 0.20-0.36
-  medium_confidence: 0.25 # NLI-verify before returning; triggers for mid-range outputs
-  low_confidence: 0.15 # retry; below this escalate immediately
+  high_confidence: 0.20 # answer directly; lowered to match observed conf-head range 0.20-0.36
+  medium_confidence: 0.15 # NLI-verify before returning
+  low_confidence: 0.10 # retry; below this escalate
   # below low_confidence: escalate / return "I don't know"
   verify_low: 0.40 # NLI entailment threshold
   verify_high: 0.55 # high-confidence NLI accept
   escalation_message: "I'm not confident enough to answer this accurately. Let me connect you with a human agent."
   enable_query_decomposition: true
-  decomposition_threshold: 0.35 # lowered to match new scale
+  decomposition_threshold: 0.15 # only decompose genuinely low-confidence multi-part queries
 
 # ---------------------------------------------------------------------------
 # Training Settings

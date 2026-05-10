@@ -83,7 +83,7 @@ class AlphaNetwork(nn.Module):
         self,
         input_dim: int = ALPHA_FEATURE_DIM,
         hidden_dim: int = 64,
-        alpha_min: float = 0.2,
+        alpha_min: float = 0.4,
         alpha_max: float = 0.8,
         safety_clamp: bool = True,
     ) -> None:
