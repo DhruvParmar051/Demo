@@ -633,14 +633,12 @@ class CGALLoopEngine:
             answer = str(answer)
 
         # Precise citations (score-filtered) — used for citation_f1 / precision
-        citations = _build_citations(state.reranked, max_citations=self.max_citations)
-        # Full context citations (all top chunks) — used for grounding score
-        # Grounding measures answer word coverage against cited text; the wider
-        # the support corpus the better, so include all retrieved chunks here.
+        citations = _build_citations(
+            state.reranked, max_citations=self.max_citations, use_score_filter=True
+        )
+        # Full context citations (all top chunks) — used for grounding score only
         grounding_citations = _build_citations(
-            state.reranked,
-            max_citations=self.max_citations,
-            score_threshold=-1.0,  # include all, no filtering
+            state.reranked, max_citations=self.max_citations, use_score_filter=False
         )
         response.answer = answer
         response.confidence = state.confidence
@@ -751,16 +749,14 @@ async def _ensure_async_iter(obj: Any) -> AsyncIterator[str]:
 def _build_citations(
     reranked: list[tuple[ChunkRecord, float]],
     max_citations: int = 5,
-    score_threshold: float = 0.0,
+    use_score_filter: bool = True,
 ) -> list[Citation]:
     """Convert reranked (chunk, score) pairs into :class:`Citation` objects.
 
-    Strategy: always include top-1 chunk, then include additional chunks only
-    if their rerank score is above ``score_threshold``.  This gives high recall
-    (top chunk always cited) while precision stays high (no low-scoring noise).
-
-    Falls back to top ``max_citations`` when all scores are 0 (dense-only path
-    with no reranker scores).
+    When ``use_score_filter=True`` (formal citations): only include chunks
+    whose score is within 40% of the top chunk score — high precision.
+    When ``use_score_filter=False`` (grounding citations): include all
+    top ``max_citations`` chunks — wide support corpus for grounding.
     """
     if not reranked:
         return []
@@ -768,20 +764,18 @@ def _build_citations(
     scores = [s for _, s in reranked]
     has_real_scores = any(s > 0.0 for s in scores)
 
-    if has_real_scores:
-        # Normalise scores to [0,1] relative to the top chunk
+    if use_score_filter and has_real_scores:
         top_score = max(scores)
-        # Always include top-1; include others if within 40% of top score
         dynamic_threshold = top_score * 0.60
         candidates = [
             (chunk, score) for chunk, score in reranked[:max_citations]
             if score >= dynamic_threshold
         ]
-        # Guarantee at least top-3 for grounding coverage
-        if len(candidates) < min(3, len(reranked)):
-            candidates = reranked[:min(3, len(reranked))]
+        # Always guarantee at least top-2
+        if len(candidates) < min(2, len(reranked)):
+            candidates = reranked[:min(2, len(reranked))]
     else:
-        # No reranker scores — cite top max_citations
+        # No filter — use all top max_citations chunks
         candidates = reranked[:max_citations]
 
     citations: list[Citation] = []
