@@ -1,13 +1,14 @@
 """
 AegisRAG - Alpha Network
 
-Lightweight 2-layer MLP that predicts the adaptive dense/sparse fusion
-weight ``alpha in [0, 1]`` from cheap per-query features:
+MLP that predicts the adaptive dense/sparse fusion weight ``alpha in [0, 1]``
+from 12 cheap per-query features:
 
-    [log_query_length, keyword_density, domain_hash,
-     query_embedding_norm, has_exact_phrase]
+    [log_query_length, keyword_density, domain_hash, query_emb_norm,
+     has_exact_phrase, is_wh_question, numeric_density, avg_word_len,
+     stopword_ratio, capitalized_ratio, has_definition_cue, verb_density]
 
-Trained against a grid-searched oracle alpha (recall@k) via MSE.
+Trained against a grid-searched oracle alpha (recall@k) via Huber loss.
 """
 
 from __future__ import annotations
@@ -26,34 +27,64 @@ logger = logging.getLogger(__name__)
 
 
 # Dimensionality of the hand-crafted feature vector.
-ALPHA_FEATURE_DIM: int = 5
+ALPHA_FEATURE_DIM: int = 12
+
+# Common English stopwords (lightweight, no NLTK dependency)
+_STOPWORDS = frozenset({
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "shall", "can", "to", "of", "in", "for",
+    "on", "with", "at", "by", "from", "as", "into", "through", "about",
+    "and", "or", "but", "if", "not", "that", "this", "it", "its", "i",
+    "you", "he", "she", "we", "they", "what", "which", "who", "when",
+    "where", "why", "how",
+})
+
+# Definition / explanation cue words → sparse BM25 tends to win
+_DEFINITION_CUES = frozenset({
+    "what", "define", "definition", "meaning", "means", "explain",
+    "describe", "described", "difference", "between", "vs", "versus",
+    "type", "types", "kind", "kinds", "category", "categories",
+})
+
+# Common English verbs (rough signal for procedural / how-to queries)
+_COMMON_VERBS = frozenset({
+    "apply", "calculate", "compute", "determine", "find", "get", "make",
+    "use", "file", "submit", "report", "claim", "request", "obtain",
+    "qualify", "meet", "exceed", "increase", "decrease", "provide",
+    "complete", "include", "exclude", "pay", "receive", "require",
+})
 
 
 class AlphaNetwork(nn.Module):
-    """Two-layer MLP ``Linear(5, 32) -> ReLU -> Linear(32, 1) -> Sigmoid``.
+    """3-layer MLP with BatchNorm + Dropout for robust alpha prediction.
+
+    Architecture:
+        Linear(12, 64) -> BN -> ReLU -> Dropout(0.2)
+        -> Linear(64, 32) -> ReLU
+        -> Linear(32, 1) -> Sigmoid
 
     Parameters
     ----------
     input_dim : int
-        Feature vector size.  Defaults to :data:`ALPHA_FEATURE_DIM` = 5.
+        Feature vector size.  Defaults to :data:`ALPHA_FEATURE_DIM` = 12.
     hidden_dim : int
-        Size of the hidden layer.
+        Size of the first hidden layer (second is hidden_dim // 2).
     alpha_min : float
         Lower clamp applied in :meth:`predict_alpha` when ``safety=True``.
     alpha_max : float
         Upper clamp applied in :meth:`predict_alpha` when ``safety=True``.
     safety_clamp : bool
         When True, predictions from :meth:`predict_alpha` are clamped to
-        ``[alpha_min, alpha_max]`` so pure-dense or pure-sparse regimes are
-        never reached at inference time.
+        ``[alpha_min, alpha_max]`` so extreme regimes are avoided.
     """
 
     def __init__(
         self,
         input_dim: int = ALPHA_FEATURE_DIM,
-        hidden_dim: int = 32,
-        alpha_min: float = 0.3,
-        alpha_max: float = 0.7,
+        hidden_dim: int = 64,
+        alpha_min: float = 0.2,
+        alpha_max: float = 0.8,
         safety_clamp: bool = True,
     ) -> None:
         super().__init__()
@@ -71,10 +102,15 @@ class AlphaNetwork(nn.Module):
         self.alpha_max = float(alpha_max)
         self.safety_clamp = bool(safety_clamp)
 
+        h2 = max(hidden_dim // 2, 16)
         self.net = nn.Sequential(
-            nn.Linear(self.input_dim, self.hidden_dim),
+            nn.Linear(self.input_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
-            nn.Linear(self.hidden_dim, 1),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_dim, h2),
+            nn.ReLU(),
+            nn.Linear(h2, 1),
             nn.Sigmoid(),
         )
 
@@ -109,13 +145,7 @@ class AlphaNetwork(nn.Module):
 
     @staticmethod
     def _domain_hash(domain: str, buckets: int = 32) -> float:
-        """Deterministic hash of a domain string into ``[0, 1)``.
-
-        Hashing the domain (rather than one-hot encoding) keeps the feature
-        vector a fixed size 5, so the network schema is stable across a
-        growing set of domains.  The ``buckets`` parameter controls
-        granularity.
-        """
+        """Deterministic hash of a domain string into ``[0, 1)``."""
         if not domain:
             return 0.0
         digest = hashlib.sha256(domain.encode("utf-8")).digest()
@@ -128,42 +158,84 @@ class AlphaNetwork(nn.Module):
         query_emb: np.ndarray,
         domain: str = "",
     ) -> torch.Tensor:
-        """Compute the 5-dim feature vector.
+        """Compute the 12-dim feature vector.
 
         Feature order:
 
-        1. ``log_query_length``  -- ``log(1 + num_tokens)``.
-        2. ``keyword_density``   -- ``|unique_tokens| / |tokens|``.
-        3. ``domain_hash``       -- deterministic hash of ``domain`` in ``[0, 1)``.
-        4. ``query_emb_norm``    -- L2 norm of ``query_emb``.
-        5. ``has_exact_phrase``  -- 1.0 if a quoted phrase is present else 0.0.
+        1.  ``log_query_length``    -- ``log(1 + num_tokens)``
+        2.  ``keyword_density``     -- ``|unique_tokens| / |tokens|``
+        3.  ``domain_hash``         -- deterministic hash of ``domain`` in [0,1)
+        4.  ``query_emb_norm``      -- L2 norm of ``query_emb``
+        5.  ``has_exact_phrase``    -- 1.0 if a quoted phrase is present
+        6.  ``is_wh_question``      -- 1.0 if starts with what/who/when/where/why/how
+        7.  ``numeric_density``     -- fraction of tokens that are numeric
+        8.  ``avg_word_len``        -- average character length of tokens (normalised /10)
+        9.  ``stopword_ratio``      -- fraction of tokens that are stopwords
+        10. ``capitalized_ratio``   -- fraction of tokens starting with uppercase
+        11. ``has_definition_cue``  -- 1.0 if a definition/explanation keyword present
+        12. ``verb_density``        -- fraction of tokens matching common action verbs
 
         Returns
         -------
         torch.Tensor
-            Shape ``(1, 5)`` on the same device as this module's parameters.
+            Shape ``(1, 12)`` on the same device as this module's parameters.
         """
         if query_emb is None:
             raise ValueError("query_emb must be a non-None numpy array.")
 
-        tokens = [t for t in re.split(r"\s+", query.strip()) if t]
-        n_tokens = len(tokens)
-        log_len = float(np.log1p(n_tokens))
+        raw_tokens = re.split(r"\s+", query.strip())
+        tokens = [t for t in raw_tokens if t]
+        n = len(tokens) or 1
+        lower_tokens = [t.lower().rstrip("?.,!;:") for t in tokens]
 
-        unique = len({t.lower() for t in tokens})
-        keyword_density = float(unique / n_tokens) if n_tokens > 0 else 0.0
+        # 1. log query length
+        log_len = float(np.log1p(n))
 
+        # 2. keyword density (unique ratio)
+        keyword_density = len(set(lower_tokens)) / n
+
+        # 3. domain hash
         dom_hash = self._domain_hash(domain)
 
+        # 4. embedding norm
         emb = np.asarray(query_emb, dtype=np.float32).reshape(-1)
         emb_norm = float(np.linalg.norm(emb)) if emb.size > 0 else 0.0
 
+        # 5. exact phrase (quoted)
         has_exact = 1.0 if re.search(r'"[^"]+"', query) else 0.0
 
-        features = np.array(
-            [log_len, keyword_density, dom_hash, emb_norm, has_exact],
-            dtype=np.float32,
-        )
+        # 6. wh-question
+        wh_words = {"what", "who", "when", "where", "why", "how", "which", "whose"}
+        is_wh = 1.0 if lower_tokens and lower_tokens[0] in wh_words else 0.0
+
+        # 7. numeric density
+        numeric_count = sum(1 for t in lower_tokens if re.fullmatch(r"\d[\d,.$%]*", t))
+        numeric_density = numeric_count / n
+
+        # 8. avg word length (normalised)
+        avg_word_len = float(np.mean([len(t) for t in tokens])) / 10.0
+
+        # 9. stopword ratio
+        stopword_count = sum(1 for t in lower_tokens if t in _STOPWORDS)
+        stopword_ratio = stopword_count / n
+
+        # 10. capitalised ratio (signals proper nouns / acronyms → BM25-friendly)
+        cap_count = sum(1 for t in tokens if t and t[0].isupper())
+        capitalized_ratio = cap_count / n
+
+        # 11. definition cue
+        has_def_cue = 1.0 if any(t in _DEFINITION_CUES for t in lower_tokens) else 0.0
+
+        # 12. verb density (action / procedural queries → dense helpful)
+        verb_count = sum(1 for t in lower_tokens if t in _COMMON_VERBS)
+        verb_density = verb_count / n
+
+        features = np.array([
+            log_len, keyword_density, dom_hash, emb_norm, has_exact,
+            is_wh, numeric_density, avg_word_len, stopword_ratio,
+            capitalized_ratio, has_def_cue, verb_density,
+        ], dtype=np.float32)
+
         device = next(self.parameters()).device
         return torch.from_numpy(features).to(device=device)
 

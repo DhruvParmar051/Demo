@@ -1,13 +1,11 @@
 """
-QLoRA + DoRA SFT of Qwen2.5-7B-Instruct with citation-weighted cross-entropy.
+LoRA + DoRA SFT of Qwen2.5-7B-Instruct — MPS only, fp16.
 
-Uses TRL's SFTTrainer with a custom ``compute_loss`` override that routes
-through :class:`CitationWeightedCELoss` so citation-marker tokens are
-upweighted relative to plain tokens.
+Loads the 7B model in fp16 (~14 GB unified memory). LoRA adapters are trained
+with attention-only target modules (q/k/v/o) for maximum throughput on MPS.
 
-``max_seq_length`` is read from ``cfg.training.generator_sft.max_seq_length``
-(the training config), not from ``cfg.models.generator.max_seq_length``
-(the inference config).
+Install deps (conda dl env):
+    conda run -n dl pip install peft trl transformers datasets
 """
 from __future__ import annotations
 
@@ -19,13 +17,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
-os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
-os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
-os.environ.setdefault("PYTORCH_MPS_PREFER_METAL", "1")
-os.environ.setdefault("PYTORCH_MPS_FAST_MATH", "1")
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+# MPS tuning — set before torch import
+os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+os.environ["PYTORCH_MPS_PREFER_METAL"] = "1"
+os.environ["PYTORCH_MPS_FAST_MATH"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 from src.utils.config import get_config
 from src.utils.determinism import set_seed
@@ -63,19 +61,16 @@ def _format_example(rec: dict[str, Any]) -> dict[str, str]:
         f"<|assistant|>\n"
     )
 
+    # answer_with_citations is the only populated field in this dataset.
+    # Strip inline citation markers [chunk_id:start-end] to get clean prose.
     response = (
-        rec.get("answer")
+        rec.get("answer_with_citations")
         or rec.get("answer_without_citations")
-        or rec.get("answer_with_citations")
+        or rec.get("answer")
         or ""
     )
 
-    # Strip citation markers from targets.
-    response = re.sub(
-        r"\[[^\]:]+:\d+-\d+\]",
-        "",
-        response,
-    ).strip()
+    response = re.sub(r"\[[^\]:]+:\d+-\d+\]", "", response).strip()
 
     return {
         "prompt": prompt,
@@ -83,69 +78,18 @@ def _format_example(rec: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def _gpu_profile() -> dict[str, Any]:
-    """Return VRAM, bf16 support, FA2 availability, and torch version info."""
+def _assert_mps() -> None:
     import torch
-
-    if torch.cuda.is_available():
-        props = torch.cuda.get_device_properties(0)
-
-        vram_gb = props.total_memory / 1024 ** 3
-
-        is_ampere_plus = props.major >= 8
-
-        bf16_ok = torch.cuda.is_bf16_supported()
-
-        fa2_ok = False
-
-        if is_ampere_plus:
-            try:
-                import flash_attn  # noqa: F401
-                fa2_ok = True
-            except ImportError:
-                pass
-
-        compile_ok = hasattr(torch, "compile") and is_ampere_plus
-
-        device_name = props.name
-
-    elif torch.backends.mps.is_available():
-        vram_gb = 0.0
-        is_ampere_plus = False
-        bf16_ok = False
-        fa2_ok = False
-        compile_ok = False
-        device_name = "Apple MPS"
-
-    else:
-        vram_gb = 0.0
-        is_ampere_plus = False
-        bf16_ok = False
-        fa2_ok = False
-        compile_ok = False
-        device_name = "CPU"
-
-    logger.info(
-        "Device: %s | VRAM: %.1f GB | bf16: %s | FA2: %s | compile: %s",
-        device_name,
-        vram_gb,
-        bf16_ok,
-        fa2_ok,
-        compile_ok,
-    )
-
-    return {
-        "vram_gb": vram_gb,
-        "is_ampere_plus": is_ampere_plus,
-        "bf16_ok": bf16_ok,
-        "fa2_ok": fa2_ok,
-        "compile_ok": compile_ok,
-        "device_name": device_name,
-    }
+    if not torch.backends.mps.is_available():
+        raise RuntimeError(
+            "MPS not available. This script requires Apple Silicon with MPS.\n"
+            "Run: conda run -n dl python -m src.training.train_generator"
+        )
+    logger.info("MPS confirmed — Apple Silicon QLoRA training.")
 
 
 def train(cfg: Any = None) -> dict[str, Any]:
-    """Run SFT on the generator."""
+    """Run fp16 LoRA SFT on the generator — MPS only."""
     cfg = cfg if cfg is not None else get_config()
 
     set_seed(42)
@@ -153,218 +97,91 @@ def train(cfg: Any = None) -> dict[str, Any]:
     try:
         import torch
     except ImportError:
-        return {
-            "status": "skipped",
-            "reason": "no_torch",
-        }
+        return {"status": "skipped", "reason": "no_torch"}
 
-    _cuda = torch.cuda.is_available()
-    _mps = torch.backends.mps.is_available()
-
-    if not _cuda and not _mps:
-        logger.warning(
-            "No GPU detected (CUDA/MPS). Generator SFT will run on CPU with "
-            "reduced batch size and fp32. This is very slow — consider using "
-            "a Kaggle T4 or Colab GPU instead."
-        )
+    _assert_mps()
 
     try:
         from transformers import (
             AutoConfig,
             AutoModelForCausalLM,
             AutoTokenizer,
-            BitsAndBytesConfig,
             Trainer,
             TrainingArguments,
-            DataCollatorWithPadding,
         )
-
         from transformers.trainer_utils import get_last_checkpoint
-
-        from peft import (
-            LoraConfig,
-            get_peft_model,
-            prepare_model_for_kbit_training,
-        )
-
+        from peft import LoraConfig, get_peft_model
         from datasets import Dataset
 
+        # bfloat16 prevents logit overflow — plain Trainer is sufficient.
+        MpsSafeTrainer = Trainer
     except ImportError as exc:
-        logger.error("Missing deps: %s", exc)
-
-        return {
-            "status": "skipped",
-            "reason": "deps_missing",
-        }
+        logger.error(
+            "Missing deps: %s\n"
+            "Fix: conda run -n dl pip install peft trl transformers datasets",
+            exc,
+        )
+        return {"status": "skipped", "reason": "deps_missing"}
 
     # ── Load QA data ────────────────────────────────────────────────────────
 
     qa_path = Path(cfg.data.synthetic.qa_path)
 
     if not qa_path.exists():
-        return {
-            "status": "skipped",
-            "reason": "no_qa_data",
-        }
+        return {"status": "skipped", "reason": "no_qa_data"}
 
     with qa_path.open("r", encoding="utf-8") as f:
         qa = [json.loads(l) for l in f if l.strip()]
 
     if not qa:
-        return {
-            "status": "skipped",
-            "reason": "no_qa_data",
-        }
+        return {"status": "skipped", "reason": "no_qa_data"}
 
-    records = [_format_example(r) for r in qa]
-
-    ds = Dataset.from_list(records)
-
-    # ── GPU profile (determines all tuning decisions below) ─────────────────
-
-    gpu = _gpu_profile()
+    ds = Dataset.from_list([_format_example(r) for r in qa])
 
     # ── Tokenizer ───────────────────────────────────────────────────────────
 
     name = cfg.models.generator.name
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        name,
-        trust_remote_code=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(name, trust_remote_code=True)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # ── Model loading ────────────────────────────────────────────────────────
-    # BitsAndBytesConfig (4-bit NF4) is only supported on CUDA.
-    # MPS and CPU fall back to fp32 full-precision loading.
+    # ── Model: fp16 on MPS ───────────────────────────────────────────────────
+    # SDPA crashes on Qwen2.5 GQA (28q/4kv heads) on MPS — eager is stable.
 
-    model_kwargs: dict[str, Any] = dict(
-        trust_remote_code=True,
+    model_config = AutoConfig.from_pretrained(name)
+    model_config._attn_implementation = "eager"
+
+    # bfloat16 on MPS (PyTorch >= 2.4): same memory as fp16 (~14 GB) but with
+    # float32's exponent range — prevents logit overflow that causes NaN loss.
+    _dtype = torch.bfloat16 if torch.backends.mps.is_available() else torch.float16
+    model = AutoModelForCausalLM.from_pretrained(
+        name,
+        config=model_config,
+        torch_dtype=_dtype,
+        device_map={"": "mps"},
         low_cpu_mem_usage=True,
+        trust_remote_code=True,
     )
 
-    config = None
+    model.config.pretraining_tp = 1
+    model.config.use_cache = False
+    model.enable_input_require_grads()
 
-    if torch.cuda.is_available():
-
-        bnb = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=(
-                torch.bfloat16 if gpu["bf16_ok"] else torch.float16
-            ),
-            bnb_4bit_use_double_quant=True,
-        )
-
-        model_kwargs["quantization_config"] = bnb
-
-        model_kwargs["device_map"] = "auto"
-
-        model_kwargs["dtype"] = (
-            torch.bfloat16 if gpu["bf16_ok"] else torch.float16
-        )
-
-    elif torch.backends.mps.is_available():
-
-        # MPS: load in fp16; no 4-bit quant support on Apple Silicon
-
-        model_kwargs["device_map"] = {"": "mps"}
-
-        torch_dtype = torch.float16
-
-        model_kwargs["dtype"] = torch_dtype
-
-        config = AutoConfig.from_pretrained(name)
-
-        # MPS SDPA kernels crash on GQA models (e.g. Qwen2.5 28q/4kv heads)
-        # with "incompatible dimensions" LLVM abort. Eager is stable on MPS.
-
-        config._attn_implementation = "eager"
-
-        logger.info(
-            "MPS detected — using eager attention fp16 config."
-        )
-
-    else:
-
-        model_kwargs["device_map"] = "cpu"
-
-        torch_dtype = torch.float16
-
-        model_kwargs["dtype"] = torch_dtype
-
-        logger.info("CPU fallback — training will be very slow")
-
-    if gpu["fa2_ok"]:
-
-        model_kwargs["attn_implementation"] = "flash_attention_2"
-
-        logger.info("Flash-Attention-2 enabled")
-
-    elif not torch.backends.mps.is_available():
-
-        model_kwargs["attn_implementation"] = "sdpa"
-
-        logger.info("Using SDPA attention (FA2 not available)")
-
-    if config is not None:
-
-        model = AutoModelForCausalLM.from_pretrained(
-            name,
-            config=config,
-            **model_kwargs,
-        )
-
-    else:
-
-        model = AutoModelForCausalLM.from_pretrained(
-            name,
-            **model_kwargs,
-        )
-
-    if torch.backends.mps.is_available():
-        model = model.to(torch.float16)
-
-        model.config.pretraining_tp = 1
-
-        model.config.use_cache = False
-
-    if torch.cuda.is_available():
-
-        model = prepare_model_for_kbit_training(
-            model,
-            use_gradient_checkpointing=True,
-            gradient_checkpointing_kwargs={
-                "use_reentrant": False,
-            },
-        )
-
-    elif torch.backends.mps.is_available():
-
-        model.enable_input_require_grads()
-
-    else:
-
-        model.enable_input_require_grads()
-
-        if hasattr(model, "gradient_checkpointing_enable"):
-
-            model.gradient_checkpointing_enable(
-                gradient_checkpointing_kwargs={
-                    "use_reentrant": False,
-                }
-            )
+    logger.info("Loaded 7B model in %s on MPS.", _dtype)
 
     # ── LoRA / DoRA ──────────────────────────────────────────────────────────
+    # r=4 keeps trainable param count low → faster optimizer step on MPS.
+    # Attention-only targets (q/k/v/o) are the highest-ROI modules for RAG.
+    # MLP projections (gate/up/down) add compute with diminishing returns here.
 
     lcfg_yaml = cfg.lora
 
     peft_cfg = LoraConfig(
         r=4,
         lora_alpha=int(lcfg_yaml.alpha),
-        target_modules=list(lcfg_yaml.target_modules),
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
         lora_dropout=float(lcfg_yaml.dropout),
         bias="none",
         task_type="CAUSAL_LM",
@@ -372,96 +189,44 @@ def train(cfg: Any = None) -> dict[str, Any]:
     )
 
     model = get_peft_model(model, peft_cfg)
-
     model.print_trainable_parameters()
 
-    if gpu["compile_ok"]:
-
-        logger.info("Compiling model with torch.compile …")
-
-        model = torch.compile(model)
+    # ── Tokenise dataset ─────────────────────────────────────────────────────
+    # fp16 7B = ~14 GB; max_seq=512 is safe on 24 GB+ unified memory.
 
     tcfg = cfg.training.generator_sft
+    max_seq = min(int(tcfg.max_seq_length), 512)
 
-    _on_cuda = torch.cuda.is_available()
-    _on_mps = torch.backends.mps.is_available()
-
-    if not _on_cuda:
-
-        # MPS / CPU: must use smallest possible batch
-
-        micro_batch = 1
-
-        grad_accum = 4
-
-        max_seq = 128
-
-        logger.info(
-            "Non-CUDA profile (device=%s): batch=1, grad_accum=4, max_seq=%d",
-            gpu["device_name"],
-            max_seq,
-        )
-
-    elif gpu["vram_gb"] < 20:
-
-        micro_batch = 1
-
-        grad_accum = 8
-
-        max_seq = min(int(tcfg.max_seq_length), 512)
-
-        logger.info(
-            "T4 profile: batch=1, grad_accum=8, max_seq=%d",
-            max_seq,
-        )
-
-    else:
-
-        micro_batch = int(tcfg.batch_size)
-
-        grad_accum = int(tcfg.gradient_accumulation_steps)
-
-        max_seq = int(tcfg.max_seq_length)
-
-        logger.info(
-            "Large GPU profile: batch=%d, grad_accum=%d, max_seq=%d",
-            micro_batch,
-            grad_accum,
-            max_seq,
-        )
+    # Reserve at least 64 tokens for the response; truncate prompt if needed.
+    max_prompt_len = max_seq - 64
 
     def _tokenize(ex: dict[str, Any]) -> dict[str, Any]:
-
-        text = (
-            ex["prompt"] +
-            ex["response"] +
-            tokenizer.eos_token
-        )
-
-        tokens = tokenizer(
-            text,
+        prompt_ids = tokenizer(
+            ex["prompt"],
             truncation=True,
-            max_length=max_seq,
+            max_length=max_prompt_len,
             padding=False,
+            add_special_tokens=False,
             return_tensors=None,
-        )
+        )["input_ids"]
 
-        prompt_len = len(
-            tokenizer(
-                ex["prompt"],
-                truncation=True,
-                max_length=max_seq,
-            )["input_ids"]
-        )
+        resp_ids = tokenizer(
+            ex["response"] + tokenizer.eos_token,
+            truncation=True,
+            max_length=max_seq - len(prompt_ids),
+            padding=False,
+            add_special_tokens=False,
+            return_tensors=None,
+        )["input_ids"]
 
-        labels = list(tokens["input_ids"])
+        input_ids = prompt_ids + resp_ids
+        labels = [-100] * len(prompt_ids) + list(resp_ids)
 
-        for i in range(min(prompt_len, len(labels))):
-            labels[i] = -100
-
-        tokens["labels"] = labels
-
-        return tokens
+        return {
+            "input_ids":      input_ids,
+            "attention_mask": [1] * len(input_ids),
+            "labels":         labels,
+        }
 
     ds = ds.map(
         _tokenize,
@@ -473,118 +238,81 @@ def train(cfg: Any = None) -> dict[str, Any]:
     # ── Checkpoint resumption ────────────────────────────────────────────────
 
     output_dir = str(Path(cfg.checkpoints.generator_sft))
-
     last_checkpoint = None
 
     if Path(output_dir).exists():
-
         last_checkpoint = get_last_checkpoint(output_dir)
-
         if last_checkpoint:
-            logger.info(
-                "Resuming from checkpoint: %s",
-                last_checkpoint,
-            )
+            logger.info("Resuming from checkpoint: %s", last_checkpoint)
 
-    if _on_cuda:
+    # ── Training args (MPS-optimised) ────────────────────────────────────────
+    # - no bf16/fp16 flags: MPS handles fp16 natively via model dtype
+    # - gradient_checkpointing=False: MPS recomputation is buggy on Qwen
+    # - adamw_torch: paged/8bit optimisers need bitsandbytes CUDA
+    # - grad_accum=8: effective batch=8 without OOM
 
-        try:
-            import apex  # noqa: F401
-
-            optim = "adamw_apex_fused"
-
-            logger.info("Using apex fused AdamW")
-
-        except ImportError:
-
-            optim = "paged_adamw_8bit"
-
-            logger.info("Using paged AdamW 8-bit")
-
-        _use_bf16 = gpu["bf16_ok"]
-
-        _use_fp16 = not gpu["bf16_ok"]
-
-        _pin_memory = True
-
-        _num_workers = 2
-
-    else:
-
-        # paged_adamw_8bit requires bitsandbytes CUDA; fall back to adamw_torch
-
-        optim = "adamw_torch"
-
-        logger.info(
-            "Using standard AdamW (no CUDA quantized optimizer)"
-        )
-
-        _use_bf16 = False
-
-        _use_fp16 = False
-
-        _pin_memory = False
-
-        _num_workers = 0
 
     args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=1,
-        per_device_train_batch_size=micro_batch,
-        gradient_accumulation_steps=grad_accum,
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=8,
         learning_rate=float(tcfg.learning_rate),
         warmup_ratio=float(tcfg.warmup_ratio),
         lr_scheduler_type="cosine",
-        logging_steps=10,
+        logging_steps=1,
         save_strategy="epoch",
         save_total_limit=2,
         gradient_checkpointing=False,
-        optim=optim,
-        bf16=_use_bf16,
-        fp16=_use_fp16,
-        dataloader_num_workers=_num_workers,
-        dataloader_pin_memory=_pin_memory,
-        dataloader_prefetch_factor=(
-            2 if _num_workers > 0 else None
-        ),
+        optim="adamw_torch",
+        bf16=False,
+        fp16=False,
+        dataloader_num_workers=0,
+        dataloader_pin_memory=False,
         max_grad_norm=0.3,
         seed=42,
         report_to=[],
     )
 
-    collator = DataCollatorWithPadding(
-        tokenizer=tokenizer,
-        padding=True,
-    )
+    # Custom collator: pads input_ids + attention_mask while preserving the
+    # -100 prompt-masking in labels set during tokenisation.
+    # DataCollatorForLanguageModeling would overwrite labels with raw input_ids,
+    # losing our prompt masking entirely.
+    def collate_fn(batch: list[dict]) -> dict:
+        import torch as _torch
+        max_len = max(len(x["input_ids"]) for x in batch)
+        pad_id = tokenizer.pad_token_id
 
-    trainer = Trainer(
+        input_ids, attention_mask, labels = [], [], []
+        for x in batch:
+            pad = max_len - len(x["input_ids"])
+            input_ids.append(x["input_ids"] + [pad_id] * pad)
+            attention_mask.append(x["attention_mask"] + [0] * pad)
+            labels.append(x["labels"] + [-100] * pad)
+
+        return {
+            "input_ids":      _torch.tensor(input_ids,      dtype=_torch.long),
+            "attention_mask": _torch.tensor(attention_mask, dtype=_torch.long),
+            "labels":         _torch.tensor(labels,         dtype=_torch.long),
+        }
+
+    trainer = MpsSafeTrainer(
         model=model,
         args=args,
         train_dataset=ds,
-        data_collator=collator,
+        data_collator=collate_fn,
         processing_class=tokenizer,
     )
 
-    trainer.train(
-        resume_from_checkpoint=last_checkpoint
-    )
+    trainer.train(resume_from_checkpoint=last_checkpoint)
 
-    if torch.backends.mps.is_available():
-        torch.mps.empty_cache()
-
+    torch.mps.empty_cache()
     gc.collect()
 
     trainer.save_model(output_dir)
+    logger.info("Saved SFT adapter to %s", cfg.checkpoints.generator_sft)
 
-    logger.info(
-        "Saved SFT adapter to %s",
-        cfg.checkpoints.generator_sft,
-    )
-
-    return {
-        "status": "ok",
-        "output_dir": str(cfg.checkpoints.generator_sft),
-    }
+    return {"status": "ok", "output_dir": str(cfg.checkpoints.generator_sft)}
 
 
 def main() -> None:

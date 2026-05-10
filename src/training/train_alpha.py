@@ -85,7 +85,7 @@ def train(cfg: Any = None) -> dict[str, Any]:
     try:
         import torch  # type: ignore
         import torch.nn.functional as F  # type: ignore
-        from torch.utils.data import DataLoader, Dataset  # type: ignore
+        from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler  # type: ignore
 
     except ImportError as exc:
         logger.error("torch required: %s", exc)
@@ -101,7 +101,7 @@ def train(cfg: Any = None) -> dict[str, Any]:
     label_path_str = (
         cfg.get_path("data.synthetic.alpha_labels_path")
         or cfg.get_path("data.alpha_labels_path")
-        or "data/synthetic/alpha_labels.jsonl"
+        or "data/synthetic/alpha_labels_v2.jsonl"
     )
 
     labels = _load_jsonl(Path(label_path_str))
@@ -183,8 +183,8 @@ def train(cfg: Any = None) -> dict[str, Any]:
     # ------------------------------------------------------------------
 
     bs = int(cfg.get_path("training.alpha.batch_size", 32))
-    lr = float(cfg.get_path("training.alpha.learning_rate", 1e-4))
-    epochs = int(cfg.get_path("training.alpha.epochs", 10))
+    lr = float(cfg.get_path("training.alpha.learning_rate", 3e-4))
+    epochs = int(cfg.get_path("training.alpha.epochs", 30))
 
     logger.info(
         "Alpha training config | batch_size=%d | lr=%f | epochs=%d",
@@ -197,72 +197,108 @@ def train(cfg: Any = None) -> dict[str, Any]:
     # Train / validation split
     # ------------------------------------------------------------------
 
+    import random
+    random.shuffle(labels)
     split = int(0.9 * len(labels))
-
     train_records = labels[:split]
+    val_records = labels[split:]
+
+    # ------------------------------------------------------------------
+    # Weighted sampler — oversample non-0.5 labels to balance classes
+    # ------------------------------------------------------------------
+
+    alpha_vals = [float(r["optimal_alpha"]) for r in train_records]
+    # Bucket alphas into 5 bins: [0-0.2), [0.2-0.4), [0.4-0.6), [0.6-0.8), [0.8-1.0]
+    def _bucket(a: float) -> int:
+        return min(int(a * 5), 4)
+
+    from collections import Counter as _Counter
+    bucket_counts = _Counter(_bucket(a) for a in alpha_vals)
+    max_count = max(bucket_counts.values())
+    sample_weights = [max_count / bucket_counts[_bucket(a)] for a in alpha_vals]
+    sampler = WeightedRandomSampler(
+        weights=sample_weights,
+        num_samples=len(train_records),
+        replacement=True,
+    )
 
     train_loader = DataLoader(
         _Dataset(train_records),
         batch_size=bs,
-        shuffle=True,
+        sampler=sampler,
+        collate_fn=collate,
+    )
+    val_loader = DataLoader(
+        _Dataset(val_records),
+        batch_size=bs,
+        shuffle=False,
         collate_fn=collate,
     )
 
     # ------------------------------------------------------------------
-    # Optimizer
+    # Optimizer + scheduler
     # ------------------------------------------------------------------
 
-    optim = torch.optim.Adam(
-        net.parameters(),
-        lr=lr,
+    optim = torch.optim.AdamW(net.parameters(), lr=lr, weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optim, T_max=epochs, eta_min=lr * 0.01
     )
 
     # ------------------------------------------------------------------
-    # Training loop
+    # Training loop  (Huber loss — robust to tie-label outliers)
     # ------------------------------------------------------------------
 
-    logger.info(
-        "Starting AlphaNetwork training for %d epochs...",
-        epochs,
-    )
+    logger.info("Starting AlphaNetwork training for %d epochs...", epochs)
 
     best_loss = float("inf")
+    best_state = None
 
     for epoch in range(epochs):
 
         net.train()
-
         total_loss = 0.0
         steps = 0
 
         for batch in train_loader:
-
             pred = net(batch["features"]).squeeze(-1)
-
-            loss = F.mse_loss(
-                pred,
-                batch["alpha"],
-            )
+            loss = F.huber_loss(pred, batch["alpha"], delta=0.15)
 
             optim.zero_grad()
-
             loss.backward()
-
+            torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
             optim.step()
 
             total_loss += loss.item()
             steps += 1
 
-        avg_loss = total_loss / max(steps, 1)
+        avg_train = total_loss / max(steps, 1)
+        scheduler.step()
 
-        best_loss = min(best_loss, avg_loss)
+        # Validation
+        net.eval()
+        val_loss = 0.0
+        val_steps = 0
+        with torch.no_grad():
+            for batch in val_loader:
+                pred = net(batch["features"]).squeeze(-1)
+                val_loss += F.huber_loss(pred, batch["alpha"], delta=0.15).item()
+                val_steps += 1
+        avg_val = val_loss / max(val_steps, 1)
+
+        if avg_val < best_loss:
+            best_loss = avg_val
+            best_state = {k: v.clone() for k, v in net.state_dict().items()}
 
         logger.info(
-            "Epoch %d/%d | avg_loss=%.6f",
-            epoch + 1,
-            epochs,
-            avg_loss,
+            "Epoch %d/%d | train=%.4f | val=%.4f | lr=%.2e",
+            epoch + 1, epochs, avg_train, avg_val,
+            scheduler.get_last_lr()[0],
         )
+
+    # Restore best weights
+    if best_state is not None:
+        net.load_state_dict(best_state)
+        logger.info("Restored best weights (val_loss=%.4f)", best_loss)
 
     # ------------------------------------------------------------------
     # Save checkpoint
@@ -282,11 +318,9 @@ def train(cfg: Any = None) -> dict[str, Any]:
 
     save_path = out_dir / "model.pt"
 
-    # Save model weights directly using torch
-    torch.save(
-        net.state_dict(),
-        save_path,
-    )
+    # Use AlphaNetwork.save() which persists {"state_dict": ..., "config": ...}
+    # so AlphaNetwork.load() can reconstruct the model correctly at inference.
+    net.save(save_path)
 
     logger.info(
         "Saved alpha network checkpoint to %s",
