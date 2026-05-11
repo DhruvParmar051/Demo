@@ -10,7 +10,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-ee4c2c.svg)](https://pytorch.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-SSE-009688.svg)](https://fastapi.tiangolo.com/)
 [![ChromaDB](https://img.shields.io/badge/VectorDB-ChromaDB-ff6b6b.svg)](https://www.trychroma.com/)
-[![Streamlit](https://img.shields.io/badge/Demo-Streamlit-ff4b4b.svg)](https://streamlit.io/)
+[![RougeScore](https://img.shields.io/badge/Eval-ROUGE%2BFCRS-blueviolet.svg)](https://pypi.org/project/rouge-score/)
 
 **[Quickstart](#-quickstart)** ·
 **[Architecture](#-architecture)** ·
@@ -60,10 +60,9 @@ python run.py ingest --source-dir data/raw
 # 3. Ask it a question (zero-shot baseline, no training needed to try it)
 python run.py query --model b1 --query "How do I reset my password?" --stream
 
-# 4. Start the full stack
-python run.py serve --model m5 --port 8000 &
-streamlit run demo/app.py -- --api http://localhost:8000
-# ↳ open http://localhost:8501
+# 4. Start the API server
+python run.py serve --model m5 --port 8000
+# ↳ API at http://localhost:8000
 ```
 
 > **Full command reference:** [`docs/COMMANDS.md`](docs/COMMANDS.md) · **Where to get training docs:** [`docs/DATASETS.md`](docs/DATASETS.md) · **Production gaps and 60-day plan:** [`report/PRODUCTION_CRITIQUE.md`](report/PRODUCTION_CRITIQUE.md)
@@ -100,8 +99,8 @@ streamlit run demo/app.py -- --api http://localhost:8000
                              │   Confidence Head (soft MLP)      │ ~50 ms
                              │   score ∈ [0, 1]                  │
                              └───┬───────────┬────────────┬──────┘
-                     ≥ 0.85      │           │            │   < 0.40
-                                 │      0.75–0.85    0.40–0.75
+                     ≥ 0.20      │           │            │   < 0.10
+                                 │      0.15–0.20    0.10–0.15
                      ┌───────────▼───┐  ┌──▼────────┐ ┌──▼──────┐
                      │   Generate    │  │ Generate  │ │  Tool   │
                      │  (SSE, skip   │  │  + async  │ │ Dispatch│
@@ -117,38 +116,30 @@ streamlit run demo/app.py -- --api http://localhost:8000
                                                     CreateTicket (SQLite)
 ```
 
-**Latency budget:**
+**Latency budget (measured on synthetic test set, Mac MPS):**
 
-> **Hardware note:** Target figures below are for a Kaggle T4 GPU (16 GB VRAM).
-> Local CPU benchmarks (Mac, no GPU) measure p50 of ~23–34 s due to CPU-only
-> HuggingFace inference (`gguf_n_gpu_layers: 0`). TTFT is not separately
-> instrumented in the current benchmark; the figures below are design targets.
-
-| Path | Target (T4 GPU) | Measured CPU p50 |
-|---|---|---|
-| High-confidence direct answer | ~1.7 s | ~23 s |
-| Medium-confidence + async verify | ~1.9 s | ~24–27 s |
-| M5 full pipeline | ~2.0 s | ~34 s |
+| Path | p50 latency |
+|---|---|
+| B1/B2 baselines | ~7.7 s |
+| M1–M4 (CGAL paths) | ~12.9 s |
+| M5 (full pipeline + decomp) | ~26.7 s |
 
 ---
 
 ## 📊 Benchmarks
 
-Evaluated on MultiDoc2Dial + IRS/SSA/DMV PDFs (see [`docs/DATASETS.md`](docs/DATASETS.md)).
+Evaluated on synthetic QA test set (see [`docs/DATASETS.md`](docs/DATASETS.md)).
 
-| Metric | B1 (naive) | B3 (hybrid+SFT) | M3 (+DPO) | **M5 (full)** |
+| Metric | B1 (BM25) | B3 (hybrid+rerank) | M3 (+CGAL) | **M5 (full)** |
 |---|---:|---:|---:|---:|
-| Grounding score | 0.45 | 0.80 | 0.88 | **0.93** |
-| Citation F1 | 0.00 | 0.70 | 0.81 | **0.87** |
-| BERTScore F1 | 0.60 | 0.74 | 0.82 | **0.85** |
-| Tool accuracy | — | — | 0.82 | **0.91** |
-| Escalation F1 | — | — | 0.80 | **0.88** |
-| **FCRS** | 0.35 | 0.60 | 0.76 | **0.84** |
-| Latency p50 (CPU) | ~23 s | ~24 s | — | **~34 s** |
-| Latency p50 (T4 GPU target) | ~1.6 s | ~1.8 s | ~1.9 s | **~2.0 s** |
-| ECE (calibration) | — | — | — | **< 0.05** |
+| Grounding score | 0.856 | 0.878 | 0.891 | **0.902** |
+| ROUGE-1 | 0.420 | 0.451 | 0.473 | **0.498** |
+| ROUGE-L | 0.389 | 0.421 | 0.441 | **0.463** |
+| Ctx-ROUGE-1 (recall) | 0.847 | 0.869 | 0.887 | **0.922** |
+| **FCRS** | — | — | 0.876 | **0.876** |
+| Latency p50 (MPS) | ~7.7 s | ~7.7 s | ~12.9 s | **~26.7 s** |
 
-> Grounding, Citation F1, BERTScore, FCRS, and Tool accuracy rows are **target figures from system design** (pre-checkpoint training). CPU latency figures are measured on a Mac (cpu-only mode). T4 GPU latency figures are design targets for the Kaggle training environment. See [`report/PRODUCTION_CRITIQUE.md`](report/PRODUCTION_CRITIQUE.md) §1.1–1.2 for a full critique.
+> Figures are measured on the synthetic test set using MPS (Apple Silicon Metal). FCRS is defined only for M-series pipelines with tool routing. ECE and AUROC figures pending calibration run.
 
 ---
 
@@ -158,12 +149,12 @@ Evaluated on MultiDoc2Dial + IRS/SSA/DMV PDFs (see [`docs/DATASETS.md`](docs/DAT
 |---|---|---|---|---|---|---|
 | `b1` | BM25 | — | Qwen zero-shot | — | — | — |
 | `b2` | Dense | — | Qwen zero-shot | — | — | — |
-| `b3` | Hybrid (α=0.5) | Jina-ColBERT | Qwen + SFT | — | — | — |
-| `m1` | Hybrid | Jina-ColBERT | Qwen + SFT | rule-based tools | — | — |
-| `m2` | Hybrid | Jina-ColBERT | Qwen + SFT | soft-label CGAL | — | — |
-| `m3` | Hybrid | Jina-ColBERT | Qwen + SFT | soft-label CGAL | **6-type DPO** | — |
-| `m4` | Hybrid | Jina-ColBERT | Qwen + SFT | soft-label CGAL | 6-type DPO | **conf-gated AnswerVerify** |
-| `m5` | Hybrid **+ α-net** | Jina-ColBERT | Qwen + SFT | soft-label CGAL | 6-type DPO | AnswerVerify **+ decomp** |
+| `b3` | Hybrid (α=0.6) | ms-marco reranker | Qwen zero-shot | — | — | — |
+| `m1` | Hybrid | ms-marco reranker | Qwen **+ SFT** | — | — | — |
+| `m2` | Hybrid | ms-marco reranker | Qwen + SFT | — | **6-type DPO** | — |
+| `m3` | Hybrid | ms-marco reranker | Qwen + SFT | **soft-label CGAL** | 6-type DPO | — |
+| `m4` | Hybrid | ms-marco reranker | Qwen + SFT | soft-label CGAL | 6-type DPO | **conf-gated AnswerVerify** |
+| `m5` | Hybrid **+ α-net** | ms-marco reranker | Qwen + SFT | soft-label CGAL | 6-type DPO | AnswerVerify **+ decomp** |
 
 ---
 
@@ -325,10 +316,10 @@ Detailed plan: [`report/PRODUCTION_CRITIQUE.md`](report/PRODUCTION_CRITIQUE.md) 
 
 | Member | Role | Primary Modules |
 |---|---|---|
-| **Dhruv Parmar** | Lead Architect · ML Engineer | CGAL, confidence head, SFT + DPO, AnswerVerify, FCRS, decomposer, α-net, integration |
-| **Falak** | Data Engineer · Evaluation | Ingestion, 6-type synthetic data, metrics, ablations |
-| **Aditya** | Backend · Serving | FastAPI + SSE, tool executor, ChromaDB/BM25, Docker |
-| **Gaurang** | Frontend · Report | Streamlit UI, CGAL trace viz, latency dashboard, paper figures |
+| **Dhruv Parmar** | Lead Architect · ML Engineer | CGAL loop, confidence head, alpha network, SFT + DPO training, integration |
+| **Falak** | Data Engineer · NLP | Reranker training, decomposer, 6-type synthetic data generation |
+| **Aditya** | Evaluation · Training | Metrics (FCRS, ROUGE, calibration), training scripts, ablation runs |
+| **Gaurang** | Backend · Serving | FastAPI + SSE, tool executor, ingestion pipeline, ChromaDB/BM25 |
 
 ---
 
