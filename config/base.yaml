@@ -247,7 +247,7 @@ serving:
 # Device Settings
 # ---------------------------------------------------------------------------
 device:
-  preferred_device: "auto" # auto | cpu | cuda | mps
+  preferred_device: "mps" # auto | cpu | cuda | mps
   gpu_memory_utilization: 0.85
 
 # ---------------------------------------------------------------------------
