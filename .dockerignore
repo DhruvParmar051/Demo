@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+dist/
+build/
+
+# Virtual environments
+.venv
+venv
+env
+
+# Large data / model artifacts (mount as volumes at runtime)
+data/
+checkpoints/
+logs/
+results/
+report/
+
+# Frontend (built separately)
+frontend/node_modules
+frontend/.next
+
+# Dev / editor
+.env
+*.env.*
+.DS_Store
+*.swp
+*.swo
+notebooks/
+kaggle/
+
+# llama.cpp source (not needed in image)
+llama.cpp/
