@@ -29,18 +29,18 @@ AegisRAG answers customer-support questions grounded in your document knowledge 
 
 Ten things that make it different from vanilla RAG:
 
-| # | Contribution | Where |
-|---|---|---|
-| 1 | **Confidence-Gated Action Loop (CGAL)** — trained soft-label confidence head replaces ReAct's brittle chain-of-thought | `src/cgal/` |
-| 2 | **Confidence-gated AnswerVerify** — NLI post-check only runs when it matters (skipped for 40% of queries, saves ~200 ms) | `src/tools/answer_verify.py` |
-| 3 | **Six-type DPO** — 6 distinct rejection categories vs. the standard 2-3, doubling gradient signal diversity | `src/data/preference_generator.py` |
-| 4 | **Adaptive alpha fusion** — learned per-query dense/sparse weight, not fixed 0.5 | `src/cgal/alpha_network.py` |
-| 5 | **Query decomposition** — multi-part questions split into atomic sub-queries, each gets its own CGAL run | `src/decomposer/` |
-| 6 | **BGE-m3 multilingual embeddings** — future language expansion without re-architecture | `src/retrieval/vector_store.py` |
-| 7 | **SSE token streaming** — tokens emitted incrementally; TTFT target ~200 ms on GPU (not separately benchmarked on CPU) | `src/serving/sse.py` |
-| 8 | **Continuous confidence calibration** — MSE on BERTScore soft labels, not binary BCE. ECE < 0.05 on dev. | `src/evaluation/calibration.py` |
-| 9 | **FCRS — First-Contact Resolution Score** — a domain-specific composite metric that captures the business goal, not just text quality | `src/evaluation/fcrs.py` |
-| 10 | **Citation-weighted CE loss** — tokens inside `[doc_id:start-end]` markers get 3× loss weight during SFT | `src/training/losses/citation_weighted_ce.py` |
+| #   | Contribution                                                                                                                          | Where                                         |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| 1   | **Confidence-Gated Action Loop (CGAL)** — trained soft-label confidence head replaces ReAct's brittle chain-of-thought                | `src/cgal/`                                   |
+| 2   | **Confidence-gated AnswerVerify** — NLI post-check only runs when it matters (skipped for 40% of queries, saves ~200 ms)              | `src/tools/answer_verify.py`                  |
+| 3   | **Six-type DPO** — 6 distinct rejection categories vs. the standard 2-3, doubling gradient signal diversity                           | `src/data/preference_generator.py`            |
+| 4   | **Adaptive alpha fusion** — learned per-query dense/sparse weight, not fixed 0.5                                                      | `src/cgal/alpha_network.py`                   |
+| 5   | **Query decomposition** — multi-part questions split into atomic sub-queries, each gets its own CGAL run                              | `src/decomposer/`                             |
+| 6   | **BGE-m3 multilingual embeddings** — future language expansion without re-architecture                                                | `src/retrieval/vector_store.py`               |
+| 7   | **SSE token streaming** — tokens emitted incrementally; TTFT target ~200 ms on GPU (not separately benchmarked on CPU)                | `src/serving/sse.py`                          |
+| 8   | **Continuous confidence calibration** — MSE on BERTScore soft labels, not binary BCE. ECE < 0.05 on dev.                              | `src/evaluation/calibration.py`               |
+| 9   | **FCRS — First-Contact Resolution Score** — a domain-specific composite metric that captures the business goal, not just text quality | `src/evaluation/fcrs.py`                      |
+| 10  | **Citation-weighted CE loss** — tokens inside `[doc_id:start-end]` markers get 3× loss weight during SFT                              | `src/training/losses/citation_weighted_ce.py` |
 
 ---
 
@@ -118,11 +118,11 @@ python run.py serve --model m5 --port 8000
 
 **Latency budget (measured on synthetic test set, Mac MPS):**
 
-| Path | p50 latency |
-|---|---|
-| B1/B2 baselines | ~7.7 s |
-| M1–M4 (CGAL paths) | ~12.9 s |
-| M5 (full pipeline + decomp) | ~26.7 s |
+| Path                        | p50 latency |
+| --------------------------- | ----------- |
+| B1/B2 baselines             | ~7.7 s      |
+| M1–M4 (CGAL paths)          | ~12.9 s     |
+| M5 (full pipeline + decomp) | ~26.7 s     |
 
 ---
 
@@ -130,14 +130,14 @@ python run.py serve --model m5 --port 8000
 
 Evaluated on synthetic QA test set (see [`docs/DATASETS.md`](docs/DATASETS.md)).
 
-| Metric | B1 (BM25) | B3 (hybrid+rerank) | M3 (+CGAL) | **M5 (full)** |
-|---|---:|---:|---:|---:|
-| Grounding score | 0.856 | 0.878 | 0.891 | **0.902** |
-| ROUGE-1 | 0.420 | 0.451 | 0.473 | **0.498** |
-| ROUGE-L | 0.389 | 0.421 | 0.441 | **0.463** |
-| Ctx-ROUGE-1 (recall) | 0.847 | 0.869 | 0.887 | **0.922** |
-| **FCRS** | — | — | 0.876 | **0.876** |
-| Latency p50 (MPS) | ~7.7 s | ~7.7 s | ~12.9 s | **~26.7 s** |
+| Metric               | B1 (BM25) | B3 (hybrid+rerank) | M3 (+CGAL) | **M5 (full)** |
+| -------------------- | --------: | -----------------: | ---------: | ------------: |
+| Grounding score      |     0.856 |              0.878 |      0.891 |     **0.902** |
+| ROUGE-1              |     0.420 |              0.451 |      0.473 |     **0.498** |
+| ROUGE-L              |     0.389 |              0.421 |      0.441 |     **0.463** |
+| Ctx-ROUGE-1 (recall) |     0.847 |              0.869 |      0.887 |     **0.922** |
+| **FCRS**             |         — |                  — |      0.876 |     **0.876** |
+| Latency p50 (MPS)    |    ~7.7 s |             ~7.7 s |    ~12.9 s |   **~26.7 s** |
 
 > Figures are measured on the synthetic test set using MPS (Apple Silicon Metal). FCRS is defined only for M-series pipelines with tool routing. ECE and AUROC figures pending calibration run.
 
@@ -145,16 +145,16 @@ Evaluated on synthetic QA test set (see [`docs/DATASETS.md`](docs/DATASETS.md)).
 
 ## 🧩 Model matrix
 
-| Tag | Retrieval | Reranker | Generator | CGAL | DPO | Extras |
-|---|---|---|---|---|---|---|
-| `b1` | BM25 | — | Qwen zero-shot | — | — | — |
-| `b2` | Dense | — | Qwen zero-shot | — | — | — |
-| `b3` | Hybrid (α=0.6) | ms-marco reranker | Qwen zero-shot | — | — | — |
-| `m1` | Hybrid | ms-marco reranker | Qwen **+ SFT** | — | — | — |
-| `m2` | Hybrid | ms-marco reranker | Qwen + SFT | — | **6-type DPO** | — |
-| `m3` | Hybrid | ms-marco reranker | Qwen + SFT | **soft-label CGAL** | 6-type DPO | — |
-| `m4` | Hybrid | ms-marco reranker | Qwen + SFT | soft-label CGAL | 6-type DPO | **conf-gated AnswerVerify** |
-| `m5` | Hybrid **+ α-net** | ms-marco reranker | Qwen + SFT | soft-label CGAL | 6-type DPO | AnswerVerify **+ decomp** |
+| Tag  | Retrieval          | Reranker          | Generator      | CGAL                | DPO            | Extras                      |
+| ---- | ------------------ | ----------------- | -------------- | ------------------- | -------------- | --------------------------- |
+| `b1` | BM25               | —                 | Qwen zero-shot | —                   | —              | —                           |
+| `b2` | Dense              | —                 | Qwen zero-shot | —                   | —              | —                           |
+| `b3` | Hybrid (α=0.6)     | ms-marco reranker | Qwen zero-shot | —                   | —              | —                           |
+| `m1` | Hybrid             | ms-marco reranker | Qwen **+ SFT** | —                   | —              | —                           |
+| `m2` | Hybrid             | ms-marco reranker | Qwen + SFT     | —                   | **6-type DPO** | —                           |
+| `m3` | Hybrid             | ms-marco reranker | Qwen + SFT     | **soft-label CGAL** | 6-type DPO     | —                           |
+| `m4` | Hybrid             | ms-marco reranker | Qwen + SFT     | soft-label CGAL     | 6-type DPO     | **conf-gated AnswerVerify** |
+| `m5` | Hybrid **+ α-net** | ms-marco reranker | Qwen + SFT     | soft-label CGAL     | 6-type DPO     | AnswerVerify **+ decomp**   |
 
 ---
 
@@ -196,14 +196,14 @@ AegisRAG/
 
 ### REST endpoints
 
-| Method | Path | Purpose |
-|---|---|---|
-| `POST` | `/query` | Synchronous answer with full `QueryResponse` JSON |
-| `POST` | `/query/stream` | Same pipeline, SSE token stream |
-| `POST` | `/query/baseline?baseline=b1` | Single-pass baseline path (b1/b2/b3) |
-| `GET` | `/health` | Liveness + cached model tags |
-| `GET` | `/tickets` | List escalation tickets |
-| `GET` | `/metrics` | Prometheus exposition format |
+| Method | Path                          | Purpose                                           |
+| ------ | ----------------------------- | ------------------------------------------------- |
+| `POST` | `/query`                      | Synchronous answer with full `QueryResponse` JSON |
+| `POST` | `/query/stream`               | Same pipeline, SSE token stream                   |
+| `POST` | `/query/baseline?baseline=b1` | Single-pass baseline path (b1/b2/b3)              |
+| `GET`  | `/health`                     | Liveness + cached model tags                      |
+| `GET`  | `/tickets`                    | List escalation tickets                           |
+| `GET`  | `/metrics`                    | Prometheus exposition format                      |
 
 ### Example — streaming
 
@@ -233,33 +233,6 @@ data: {"answer":"...","confidence":0.88,"latency_ms":1832,"ttft_ms":198,...}
 ### Event types
 
 `token` · `citation` · `tool_call` · `verify_start` · `verify_result` · `done` · `error`
-
----
-
-## 🚀 Deploy
-
-### Docker Compose (recommended for dev / demos)
-
-```bash
-docker compose build
-docker compose up -d
-# API → http://localhost:8000
-# UI  → http://localhost:8501
-```
-
-### GPU container
-
-```bash
-docker run --rm --gpus all -p 8000:8000 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/checkpoints:/app/checkpoints \
-  -e AEGIS_DEVICE__PREFERRED_DEVICE=cuda \
-  aegisrag:latest python run.py serve --model m5 --port 8000
-```
-
-### Kubernetes sketch
-
-Starter manifests aren't shipped yet; the critique report §2.3 lays out the scale-out plan (external ChromaDB, vLLM server, HPA on queue depth). See [`report/PRODUCTION_CRITIQUE.md`](report/PRODUCTION_CRITIQUE.md) §5 for the 60-day production-readiness roadmap.
 
 ---
 
@@ -297,40 +270,31 @@ python run.py calibrate --model m5               # <1 min
 ## 🗺️ Roadmap
 
 **Research direction** (novel contributions to build on top of CGAL):
+
 - Retrieval-Augmented Confidence (RAC) — query/evidence divergence as a second axis
 - Speculative token verification — inject corrections mid-generation
 - Adaptive max-iterations — learn optimal CGAL depth per query
 - Cross-lingual confidence-head transfer (BGE-m3 is already multilingual)
 
-**Production direction** (from the critique report):
-- Weeks 1-2: Auth, rate-limiting, PII scrubbing, committed checkpoints
-- Weeks 3-4: OTEL tracing, external ChromaDB, vLLM generator, CI
-- Weeks 5-6: 70% test coverage, multi-stage Docker, MLflow versioning
-- Weeks 7-8: SOC 2 prep, load testing, customer-ready UI
-
-Detailed plan: [`report/PRODUCTION_CRITIQUE.md`](report/PRODUCTION_CRITIQUE.md) §5.
-
 ---
 
 ## 👥 Team
 
-| Member | Role | Primary Modules |
-|---|---|---|
-| **Dhruv Parmar** | Lead Architect · ML Engineer | CGAL loop, confidence head, alpha network, SFT + DPO training, integration |
-| **Falak** | Data Engineer · NLP | Reranker training, decomposer, 6-type synthetic data generation |
-| **Aditya** | Evaluation · Training | Metrics (FCRS, ROUGE, calibration), training scripts, ablation runs |
-| **Gaurang** | Backend · Serving | FastAPI + SSE, tool executor, ingestion pipeline, ChromaDB/BM25 |
+- Dhruv Parmar
+- Falak
+- Aditya
+- Gaurang
 
 ---
 
 ## 📚 Documentation
 
-| Doc | What's in it |
-|---|---|
-| [`docs/COMMANDS.md`](docs/COMMANDS.md) | Every command from `pip install` to `kubectl apply`, with expected output |
-| [`docs/DATASETS.md`](docs/DATASETS.md) | 30+ free/public document sources to train on — MultiDoc2Dial, IRS pubs, SSA, DMV, PostgreSQL, Kubernetes, AWS whitepapers, etc. |
-| [`report/PRODUCTION_CRITIQUE.md`](report/PRODUCTION_CRITIQUE.md) | Honest, unflinching audit — what's ready, what isn't, and a 60-day plan to close the gap |
-| [`CLAUDE.md`](CLAUDE.md) | Agent-and-human guide to the architecture and where everything lives |
+| Doc                                                              | What's in it                                                                                                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| [`docs/COMMANDS.md`](docs/COMMANDS.md)                           | Every command from `pip install` to `kubectl apply`, with expected output                                                       |
+| [`docs/DATASETS.md`](docs/DATASETS.md)                           | 30+ free/public document sources to train on — MultiDoc2Dial, IRS pubs, SSA, DMV, PostgreSQL, Kubernetes, AWS whitepapers, etc. |
+| [`report/PRODUCTION_CRITIQUE.md`](report/PRODUCTION_CRITIQUE.md) | Honest, unflinching audit — what's ready, what isn't, and a 60-day plan to close the gap                                        |
+| [`CLAUDE.md`](CLAUDE.md)                                         | Agent-and-human guide to the architecture and where everything lives                                                            |
 
 ---
 

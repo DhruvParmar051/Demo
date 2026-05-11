@@ -27,6 +27,7 @@ uvicorn[standard]>=0.30.0,<0.33.0
 sse-starlette>=2.1.0,<2.3.0
 pydantic>=2.7.0,<2.10.0
 pydantic-settings>=2.3.0,<2.7.0
+python-multipart>=0.0.9,<0.1.0
 
 # --- Document Parsing ---
 pdfplumber>=0.11.0,<0.12.0
