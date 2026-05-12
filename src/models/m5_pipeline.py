@@ -165,7 +165,7 @@ class M5Pipeline:
                     self.reranker = ColBERTReranker(checkpoint_path=str(reranker_ckpt))
                     logger.info("Loaded fine-tuned reranker from %s", reranker_ckpt)
                 except Exception as exc:
-                    logger.warning(
+                    logger.debug(
                         "Fine-tuned reranker load failed (%s); falling back to base.", exc
                     )
                     self.reranker = ColBERTReranker()

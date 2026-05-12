@@ -30,7 +30,7 @@ from pathlib import Path
 # MPS: fall back to CPU for unsupported ops instead of hard-crashing.
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 # HuggingFace Hub: suppress unauthenticated-request nag.
-os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "0")
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 # transformers: suppress deprecation spam and generation-flag warnings.
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
@@ -237,7 +237,18 @@ def cmd_query(args: argparse.Namespace, cfg: dict) -> None:
     else:
         print(f"\nAnswer: {result['answer']}")
         print(f"Confidence: {result['confidence']:.3f}")
-        print(f"Sources: {result.get('sources', [])}")
+        citations = result.get("citations") or result.get("sources", [])
+        if citations:
+            for c in citations:
+                if isinstance(c, dict):
+                    doc = c.get("doc_id") or c.get("chunk", {}).get("doc_id", "?")
+                    start = c.get("start_char") or c.get("chunk", {}).get("start_char", "")
+                    end = c.get("end_char") or c.get("chunk", {}).get("end_char", "")
+                    print(f"  [{doc}:{start}-{end}]")
+                else:
+                    print(f"  {c}")
+        else:
+            print("Citations: none")
         if result.get("sub_queries"):
             print(f"Decomposed into: {result['sub_queries']}")
 
