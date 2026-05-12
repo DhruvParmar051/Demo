@@ -306,7 +306,7 @@ If this work is useful in your research:
 @misc{aegisrag2026,
   title        = {AegisRAG: Grounded Customer-Support Copilot with
                   Confidence-Gated Action Loops and Six-Type Preference Alignment},
-  author       = {Parmar, Dhruv and Falak, and Aditya, and Gaurang},
+  author       = {Dhruv Parmar},
   year         = {2026},
   howpublished = {DS 615 Project, \url{https://github.com/<your-repo>}},
   note         = {Ten novel contributions: CGAL, soft-label confidence,
