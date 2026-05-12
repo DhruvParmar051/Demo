@@ -325,11 +325,13 @@ class AlphaNetwork(nn.Module):
                 f"Invalid AlphaNetwork checkpoint at {path}: missing state_dict."
             )
         cfg = payload.get("config", {})
+        # hidden_dim fallback matches __init__ default (64) so that a checkpoint
+        # with a missing config dict reconstructs with the correct architecture.
         model = cls(
             input_dim=int(cfg.get("input_dim", ALPHA_FEATURE_DIM)),
-            hidden_dim=int(cfg.get("hidden_dim", 32)),
-            alpha_min=float(cfg.get("alpha_min", 0.3)),
-            alpha_max=float(cfg.get("alpha_max", 0.7)),
+            hidden_dim=int(cfg.get("hidden_dim", 64)),
+            alpha_min=float(cfg.get("alpha_min", 0.4)),
+            alpha_max=float(cfg.get("alpha_max", 0.8)),
             safety_clamp=bool(cfg.get("safety_clamp", True)),
         )
         model.load_state_dict(payload["state_dict"])

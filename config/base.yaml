@@ -27,7 +27,7 @@ models:
     top_k: 50
     repetition_penalty: 1.1
     do_sample: true
-    gguf_path: "checkpoints/aegis_final.gguf"
+    gguf_path: "checkpoints/aegis_dpo.gguf" # per-variant GGUFs: aegis_base/sft/dpo.gguf
     gguf_n_ctx: 4096
     gguf_n_gpu_layers: -1 # -1 = all layers on GPU/Metal; set 0 to force CPU
 
@@ -54,7 +54,7 @@ retrieval:
   bm25_b: 0.75
   bm25_epsilon: 0.25
   initial_alpha: 0.6 # dense weight in hybrid fusion (1-alpha = BM25 weight)
-  alpha_min: 0.4   # floor: never go more than 60% sparse — dense wins on these docs
+  alpha_min: 0.4 # floor: never go more than 60% sparse — dense wins on these docs
   alpha_max: 0.9
   similarity_metric: "cosine"
   dedup_threshold: 0.92 # MinHash near-dup threshold during ingestion
@@ -68,8 +68,8 @@ cgal:
   medium_confidence: 0.15 # NLI-verify before returning
   low_confidence: 0.10 # retry; below this escalate
   # below low_confidence: escalate / return "I don't know"
-  verify_low: 0.40 # NLI entailment threshold
-  verify_high: 0.55 # high-confidence NLI accept
+  verify_low: 0.20  # NLI grounding score -> 'partial' (matches answer_verify.py partial_threshold)
+  verify_high: 0.30 # NLI grounding score -> 'pass'  (matches answer_verify.py pass_threshold)
   escalation_message: "I'm not confident enough to answer this accurately. Let me connect you with a human agent."
   enable_query_decomposition: true
   decomposition_threshold: 0.15 # only decompose genuinely low-confidence multi-part queries
@@ -95,10 +95,10 @@ training:
   report_to: "none"
 
   retriever:
-    learning_rate: 5.0e-6   # lowered from 2e-5 — top-4 layers are already warm, smaller steps
+    learning_rate: 5.0e-6 # lowered from 2e-5 — top-4 layers are already warm, smaller steps
     num_epochs: 3
-    batch_size: 32       # used on GPU; overridden by mac_batch_size on Mac
-    mac_batch_size: 4    # slightly larger batch = less gradient noise on MPS
+    batch_size: 32 # used on GPU; overridden by mac_batch_size on Mac
+    mac_batch_size: 4 # slightly larger batch = less gradient noise on MPS
     warmup_ratio: 0.1
     weight_decay: 0.01
     max_grad_norm: 1.0
@@ -106,7 +106,7 @@ training:
     hard_negatives: 7
     hard_negative_mining: true
     in_batch_negatives: true
-    trainable_top_layers: 4  # freeze bottom 20/24 BGE-m3 layers to fit on Mac
+    trainable_top_layers: 4 # freeze bottom 20/24 BGE-m3 layers to fit on Mac
     loss: "infonce"
     triplet_margin: 0.2
     temperature: 0.05
@@ -121,8 +121,8 @@ training:
     max_grad_norm: 1.0
     max_seq_length: 512
     pos_neg_ratio: 2.0 # kept for backward compat; superseded by hard/random_negatives
-    hard_negatives: 5  # BM25 top-k non-gold chunks per query (hard negatives)
-    random_negatives: 2  # random citations from other queries (easy negatives)
+    hard_negatives: 5 # BM25 top-k non-gold chunks per query (hard negatives)
+    random_negatives: 2 # random citations from other queries (easy negatives)
     loss: "cross_entropy"
     label_smoothing: 0.1
     output_dir: "checkpoints/reranker"
@@ -241,7 +241,7 @@ serving:
   max_concurrent_requests: 10
   cors_origins:
     - "*"
-  api_prefix: "/api/v1"
+
 
 # ---------------------------------------------------------------------------
 # Device Settings
@@ -255,7 +255,7 @@ device:
 # ---------------------------------------------------------------------------
 data:
   vector_db_path: "data/vectordb"
-  vector_db_collection: "aegis_chunks_ft"   # fine-tuned retriever collection
+  vector_db_collection: "aegis_chunks_ft" # fine-tuned retriever collection
   bm25_index_path: "data/bm25_index.pkl"
   audit_db_path: "data/audit.db"
   raw_docs_dir: "data/raw_docs"

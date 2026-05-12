@@ -5,7 +5,7 @@ Every command you need, in the order you need it. Copy-pasteable.
 > **Current setup snapshot (as of April 2026)**
 > - Environment: `conda activate dl` (Python 3.10)
 > - Device: Apple Silicon Mac (MPS detected, CPU used for GGUF inference)
-> - Generator: `checkpoints/aegis_final.gguf` (Qwen2.5-7B q4_k_m, 4.4 GB) — **already built**
+> - Generator: `checkpoints/aegis_dpo.gguf` (Qwen2.5-7B q4_k_m, 4.4 GB) — **already built**
 > - Reranker: `cross-encoder/ms-marco-MiniLM-L-6-v2` fine-tuned checkpoint at `checkpoints/reranker/`
 > - Retriever: `BAAI/bge-m3` fine-tuned checkpoint at `checkpoints/retriever/`
 > - Training: No SFT, no decomposer — pipeline is retriever → reranker → DPO → confidence → alpha
@@ -27,7 +27,7 @@ python --version          # should be 3.10.x
 python -c "import torch; print('MPS:', torch.backends.mps.is_available(), '| CUDA:', torch.cuda.is_available())"
 
 # Confirm GGUF is in place (4.4 GB)
-ls -lh checkpoints/aegis_final.gguf
+ls -lh checkpoints/aegis_dpo.gguf
 ```
 
 ---
@@ -132,7 +132,7 @@ Output files in `data/synthetic/`:
 
 ## 4. Training
 
-**Already trained and converted to GGUF. Skip to Section 7 if `checkpoints/aegis_final.gguf` exists.**
+**Already trained and converted to GGUF. Skip to Section 7 if `checkpoints/aegis_dpo.gguf` exists.**
 
 Training order (retriever → reranker → dpo → confidence → alpha):
 
@@ -156,7 +156,7 @@ python run.py train --component reranker
 python run.py train --component dpo
 # Output: checkpoints/dpo/
 
-# 4.5 Confidence head (KL divergence, soft labels, ~10 min)
+# 4.5 Confidence head (MSE loss, NLI-entailment soft labels, ~10 min)
 python run.py train --component confidence
 # Output: checkpoints/confidence_head/
 
@@ -168,18 +168,18 @@ python run.py train --component alpha
 > **SFT is skipped** — no `generator` or `decomposer` component.
 > Running `python run.py train --component generator` will raise a clear error by design.
 
-### 4.7 Convert to GGUF (already done — `checkpoints/aegis_final.gguf` exists)
+### 4.7 Convert to GGUF (already done — `checkpoints/aegis_dpo.gguf` exists)
 
 ```bash
 # Only run this if you retrain DPO and need a new GGUF
 python scripts/convert_to_gguf.py \
   --base-model Qwen/Qwen2.5-7B-Instruct \
   --dpo-path checkpoints/dpo \
-  --output checkpoints/aegis_final.gguf \
+  --output checkpoints/aegis_dpo.gguf \
   --quant q4_k_m
 
 # Verify the file
-ls -lh checkpoints/aegis_final.gguf   # should be ~4.4 GB
+ls -lh checkpoints/aegis_dpo.gguf   # should be ~4.4 GB
 ```
 
 ---

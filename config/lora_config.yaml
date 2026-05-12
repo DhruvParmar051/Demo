@@ -81,7 +81,7 @@ dpo:
   max_seq_length: 2048
   max_prompt_length: 1024
   beta: 0.1                   # DPO KL penalty coefficient
-  loss_type: "sigmoid"         # sigmoid | hinge | ipo
+  loss_type: "ipo"             # sigmoid | hinge | ipo
   reference_free: false        # whether to skip reference model
   sft_adapter_path: "checkpoints/generator_sft"  # base adapter to load before DPO
   output_dir: "checkpoints/dpo"

@@ -86,18 +86,18 @@ class RetrievalConfig(BaseModel):
 
 
 class CGALConfig(BaseModel):
-    max_iterations: int = 3
-    high_confidence: float = 0.35
-    medium_confidence: float = 0.25
-    low_confidence: float = 0.15
-    verify_low: float = 0.40
-    verify_high: float = 0.55
+    max_iterations: int = 2
+    high_confidence: float = 0.20   # answer directly (matches observed head range 0.20–0.36)
+    medium_confidence: float = 0.15  # answer + NLI verify
+    low_confidence: float = 0.10    # retry; below this → escalate
+    verify_low: float = 0.20        # NLI grounding score → 'partial' (matches answer_verify.py)
+    verify_high: float = 0.30       # NLI grounding score → 'pass'
     escalation_message: str = (
         "I'm not confident enough to answer this accurately. "
         "Let me connect you with a human agent."
     )
     enable_query_decomposition: bool = True
-    decomposition_threshold: float = 0.35
+    decomposition_threshold: float = 0.15
 
 
 class RetrieverTrainingConfig(BaseModel):
@@ -307,7 +307,6 @@ class ServingConfig(BaseModel):
     request_timeout: int = 120
     max_concurrent_requests: int = 10
     cors_origins: List[str] = Field(default_factory=lambda: ["*"])
-    api_prefix: str = "/api/v1"
 
 
 class DeviceConfig(BaseModel):

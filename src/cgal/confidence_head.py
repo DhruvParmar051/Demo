@@ -8,8 +8,9 @@ embedding, and optional scalar features to produce:
 * a 4-way ``tool_logits`` distribution over
   ``[AnswerDirect, SearchKB, GetPolicy, CreateTicket]``.
 
-The head is trained with soft labels (KL divergence) and calibrated post-hoc
-via temperature scaling.
+The head is trained with MSE loss against NLI-entailment soft labels
+(cross-encoder/nli-deberta-v3-small) and calibrated post-hoc via temperature
+scaling.
 """
 
 from __future__ import annotations
@@ -53,6 +54,9 @@ class ConfidenceHead(nn.Module):
     extra_feature_dim : int
         Dimensionality ``F`` of optional scalar features.  Pass ``0`` to
         disable extra features entirely.
+    hidden_dim : int
+        Size of the first hidden layer; second hidden layer is ``hidden_dim // 4``.
+        The trained checkpoint was produced with ``hidden_dim=512``.
     dropout : float
         Dropout probability between the two hidden layers.
     num_tools : int
@@ -64,6 +68,7 @@ class ConfidenceHead(nn.Module):
         self,
         embedding_dim: int = 1024,
         extra_feature_dim: int = 0,
+        hidden_dim: int = 512,
         dropout: float = 0.1,
         num_tools: int = 4,
     ) -> None:
@@ -76,19 +81,21 @@ class ConfidenceHead(nn.Module):
 
         self.embedding_dim = int(embedding_dim)
         self.extra_feature_dim = int(extra_feature_dim)
+        self.hidden_dim = int(hidden_dim)
         self.num_tools = int(num_tools)
 
         in_dim = 2 * self.embedding_dim + self.extra_feature_dim
+        h2 = max(hidden_dim // 4, 32)
 
         self.trunk = nn.Sequential(
-            nn.Linear(in_dim, 512),
+            nn.Linear(in_dim, hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(512, 128),
+            nn.Linear(hidden_dim, h2),
             nn.ReLU(),
         )
-        self.confidence_head = nn.Linear(128, 1)
-        self.tool_policy_head = nn.Linear(128, self.num_tools)
+        self.confidence_head = nn.Linear(h2, 1)
+        self.tool_policy_head = nn.Linear(h2, self.num_tools)
 
         # Temperature scaling for confidence calibration.  Held as a buffer
         # so it moves with the model but is not optimized alongside the
@@ -277,6 +284,7 @@ class ConfidenceHead(nn.Module):
         return {
             "embedding_dim": self.embedding_dim,
             "extra_feature_dim": self.extra_feature_dim,
+            "hidden_dim": self.hidden_dim,
             "num_tools": self.num_tools,
             "calibrated": self._calibrated,
         }
@@ -311,6 +319,7 @@ class ConfidenceHead(nn.Module):
         model = cls(
             embedding_dim=int(cfg.get("embedding_dim", 1024)),
             extra_feature_dim=int(cfg.get("extra_feature_dim", 0)),
+            hidden_dim=int(cfg.get("hidden_dim", 512)),
             num_tools=int(cfg.get("num_tools", 4)),
         )
         model.load_state_dict(payload["state_dict"])

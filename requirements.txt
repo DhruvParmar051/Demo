@@ -45,6 +45,7 @@ tiktoken>=0.7.0,<1.0.0
 
 # --- Evaluation ---
 rouge-score>=0.1.2,<0.2.0
+bert-score>=0.3.13,<0.4.0
 datasketch>=1.6.0,<1.7.0
 
 # --- Infrastructure ---

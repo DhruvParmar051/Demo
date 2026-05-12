@@ -118,8 +118,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
     except ImportError:
         EventSourceResponse = None  # type: ignore
 
-    cfg = config if config is not None else get_config()
-    api_prefix = getattr(cfg.serving, "api_prefix", "").rstrip("/")  # e.g. "/api/v1"
+    cfg = config if config is not None else get_config() 
     app = FastAPI(title="AegisRAG", version="1.0.0")
 
     # Fix 1: Read CORS origins from config instead of hardcoded localhost list.
@@ -190,7 +189,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
     )
 
     # All routes are registered on this router so they share the /api/v1 prefix.
-    router = APIRouter(prefix=api_prefix)
+    router = APIRouter()
 
     # ---------------- health ----------------------------------------------
 
@@ -549,7 +548,7 @@ def create_app(config: Any = None, model_tag: str | None = None) -> Any:
         audit.close()
 
     app.include_router(router)
-    app.include_router(build_ingest_router(config), prefix=api_prefix)
+    app.include_router(build_ingest_router(config))
 
     return app
 

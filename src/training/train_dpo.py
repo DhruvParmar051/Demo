@@ -200,14 +200,14 @@ def train(cfg: Any = None) -> dict[str, Any]:
     training_cfg = _attr(cfg, "training")
     tcfg = _attr(training_cfg, "dpo") if training_cfg else None
 
-    lr         = float(_cfg_get(tcfg, "learning_rate", 2.0e-6))
-    beta       = float(_cfg_get(tcfg, "beta", 0.3))
-    max_seq    = int(_cfg_get(tcfg, "max_seq_length", 512))
-    max_prompt = int(_cfg_get(tcfg, "max_prompt_length", 256))
+    lr         = float(_cfg_get(tcfg, "learning_rate", 5.0e-6))
+    beta       = float(_cfg_get(tcfg, "beta", 0.1))
+    max_seq    = int(_cfg_get(tcfg, "max_seq_length", 1536))
+    max_prompt = int(_cfg_get(tcfg, "max_prompt_length", 768))
     grad_accum = int(_cfg_get(tcfg, "gradient_accumulation_steps", 8))
     epochs     = int(_cfg_get(tcfg, "num_epochs", 1))
     bsz        = int(_cfg_get(tcfg, "batch_size", 1))
-    loss_type  = str(_cfg_get(tcfg, "loss_type", "sigmoid"))
+    loss_type  = str(_cfg_get(tcfg, "loss_type", "ipo"))
 
     lora_root = _attr(cfg, "lora")
     glcfg = _attr(lora_root, "generator_dpo") if lora_root else None

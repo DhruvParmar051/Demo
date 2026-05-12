@@ -156,12 +156,22 @@ class M5Pipeline:
         if reranker is not None:
             self.reranker = reranker
         else:
-            # NOTE: Fine-tuned reranker produces lower scores and different top-1
-            # chunks than the base model on held-out queries — likely due to
-            # insufficient hard negative diversity during training.
-            # Using base cross-encoder until reranker is retrained.
-            self.reranker = ColBERTReranker()
-            logger.info("Using base ColBERT reranker.")
+            reranker_ckpt_dir = getattr(cfg.checkpoints, "reranker", None)
+            reranker_ckpt = (
+                Path(reranker_ckpt_dir) / "model.pt" if reranker_ckpt_dir else None
+            )
+            if reranker_ckpt and reranker_ckpt.exists():
+                try:
+                    self.reranker = ColBERTReranker(checkpoint_path=str(reranker_ckpt))
+                    logger.info("Loaded fine-tuned reranker from %s", reranker_ckpt)
+                except Exception as exc:
+                    logger.warning(
+                        "Fine-tuned reranker load failed (%s); falling back to base.", exc
+                    )
+                    self.reranker = ColBERTReranker()
+            else:
+                self.reranker = ColBERTReranker()
+                logger.info("Using base ColBERT reranker (no checkpoint found).")
 
         # Select the pre-merged GGUF for this variant so that adapter weights are
         # actually applied at inference time.  GGUF (llama-cpp) cannot load HF
@@ -174,7 +184,7 @@ class M5Pipeline:
             variant_gguf = base_dir / f"aegis_{flags.gguf_variant}.gguf"
             # Fall back to the legacy single GGUF when per-variant files have not
             # been exported yet so existing setups keep working.
-            legacy_gguf = Path(getattr(cfg.models.generator, "gguf_path", "checkpoints/aegis_final.gguf"))
+            legacy_gguf = Path(getattr(cfg.models.generator, "gguf_path", "checkpoints/aegis_dpo.gguf"))
             chosen_gguf = variant_gguf if variant_gguf.exists() else legacy_gguf
             if not variant_gguf.exists():
                 logger.warning(

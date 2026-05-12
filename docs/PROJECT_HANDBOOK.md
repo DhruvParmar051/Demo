@@ -392,7 +392,7 @@ Stage 2: DPO
     Teach the model to avoid six specific failure modes
     ↓
 Stage 3: Component Training (parallel)
-    Confidence Head — KL divergence on soft labels
+    Confidence Head — MSE loss on NLI-entailment soft labels
     Alpha Network   — Huber loss on oracle α labels
     Reranker        — BCE with hard negatives
 ```
@@ -626,8 +626,8 @@ Model: cross-encoder/nli-MiniLM2-L6-H768
 Args: answer (str), cited_spans (list)
 Returns: "pass" | "partial" | "fail"
 NLI entailment thresholds:
-    pass    → entailment score ≥ verify_high (0.55)
-    partial → verify_low (0.40) ≤ score < verify_high
+    pass    → entailment score ≥ verify_high (0.30)
+    partial → verify_low (0.20) ≤ score < verify_high
     fail    → score < verify_low
 Invoked: ONLY at medium confidence (skipped for ~40% of queries at high conf)
 ```

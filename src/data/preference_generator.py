@@ -14,8 +14,7 @@ corruption strategies:
   * ``unsafe_tone``           -- reframe the answer with dismissive or
                                  unhelpful phrasing
 
-DPO training consumes the grounding-critical types (see DPO_TRAINING_TYPES);
-``partial_truncation`` is written to disk but filtered by the trainer.
+All six types are consumed during DPO training (see DPO_TRAINING_TYPES).
 
 Target: ``cfg.synthetic_data.preference_triplets`` (default 200).
 """

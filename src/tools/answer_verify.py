@@ -40,6 +40,8 @@ class AnswerVerify:
         Final grounding score >= this -> 'partial', else 'fail'.
     skip_confidence : float
         If upstream confidence >= this value, verification is skipped.
+        Must be above the CGAL high_confidence threshold (0.20) to ever
+        be triggered.  Default 0.25 sits just above that cutoff.
     """
 
     def __init__(
@@ -48,7 +50,7 @@ class AnswerVerify:
         entail_threshold: float = 0.3,
         pass_threshold: float = 0.20,
         partial_threshold: float = 0.10,
-        skip_confidence: float = 0.85,
+        skip_confidence: float = 0.25,
     ) -> None:
         cfg = get_config()
         self.model_name = model_name or cfg.models.nli.name
@@ -196,11 +198,10 @@ class AnswerVerify:
                     logits = _np.asarray(row, dtype=float)
                     ex = _np.exp(logits - logits.max())
                     probs = ex / ex.sum()
-                    # Index mapping depends on model; most NLI models use
-                    # [contradiction, entailment, neutral] or [c, e, n].
-                    # Here we take the max index and treat index 1 as entailment
-                    # by convention for DeBERTa/MiniLM.
-                    entail_p = float(probs[1])
+                    # cross-encoder/nli-MiniLM2-L6-H768 label order:
+                    # [contradiction=0, neutral=1, entailment=2]
+                    # Use index 2 for entailment probability.
+                    entail_p = float(probs[2])
             except Exception:
                 entail_p = float(row)
 
