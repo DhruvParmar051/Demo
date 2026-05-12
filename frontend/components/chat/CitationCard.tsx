@@ -68,7 +68,6 @@ export function CitationCard({ citation, index }: CitationCardProps) {
                   <div className="flex items-center gap-3 flex-wrap">
                     <span>Doc: <span className="text-[var(--muted-2)] font-mono">{citation.doc_id.slice(0, 16)}…</span></span>
                     {citation.page_number && <span>Page {citation.page_number}</span>}
-                    <span>Span: {citation.span_start}–{citation.span_end}</span>
                   </div>
                   {citation.source_url && (
                     <a href={citation.source_url} target="_blank" rel="noopener noreferrer"

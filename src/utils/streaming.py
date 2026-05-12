@@ -169,7 +169,7 @@ class AsyncTokenGenerator:
         self,
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        max_new_tokens: int = 512,
+        max_new_tokens: int = 1024,
         temperature: float = 0.3,
         top_p: float = 0.9,
         top_k: int = 50,

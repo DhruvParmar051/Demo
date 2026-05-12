@@ -21,7 +21,7 @@ models:
 
   generator:
     name: "Qwen/Qwen2.5-7B-Instruct"
-    max_new_tokens: 512
+    max_new_tokens: 1024
     temperature: 0.3
     top_p: 0.9
     top_k: 50
